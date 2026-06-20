@@ -1,0 +1,65 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "compile",
+      "type": "shell",
+      "command": "npm run compile",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$esbuild-watch"]
+    },
+    {
+      "label": "watch",
+      "type": "shell",
+      "command": "npm run watch",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "esbuild",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "\\[daily-work-log\\] watching",
+          "endsPattern": "\\[daily-work-log\\] (build done|watching)"
+        }
+      },
+      "presentation": {
+        "reveal": "never",
+        "group": "watchers"
+      }
+    },
+    {
+      "label": "watch:all",
+      "dependsOn": [
+        "watch",
+        "watch:webview"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "watch:webview",
+      "type": "shell",
+      "command": "npm run watch:webview",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": "$tsc-watch",
+      "presentation": {
+        "reveal": "never",
+        "group": "watchers"
+      }
+    }
+  ]
+}

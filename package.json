@@ -1,0 +1,202 @@
+{
+  "name": "daily-work-log",
+  "displayName": "Daily Work Log",
+  "description": "Daily work log management with date-based organization, form collection, and AI summary generation",
+  "version": "0.1.5",
+  "packageManager": "yarn@3.8.1",
+  "publisher": "acongm",
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Acongm/fill-work-code"
+  },
+  "homepage": "https://github.com/Acongm/fill-work-code#readme",
+  "bugs": {
+    "url": "https://github.com/Acongm/fill-work-code/issues"
+  },
+  "keywords": [
+    "work log",
+    "daily report",
+    "git",
+    "timesheet",
+    "ai"
+  ],
+  "categories": [
+    "Productivity",
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:daily-work-log.chatView"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "daily-work-log",
+          "title": "📋 工作日志",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "daily-work-log": [
+        {
+          "type": "webview",
+          "id": "daily-work-log.chatView",
+          "name": "📋 工作日志"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "daily-work-log.openForm",
+        "title": "打开每日工作日报",
+        "category": "Work Log"
+      },
+      {
+        "command": "daily-work-log.viewMonth",
+        "title": "查看当月工作汇总",
+        "category": "Work Log"
+      },
+      {
+        "command": "daily-work-log.openStorage",
+        "title": "打开日志存储位置",
+        "category": "Work Log"
+      },
+      {
+        "command": "daily-work-log.quickOpen",
+        "title": "快速打开",
+        "category": "Work Log"
+      },
+      {
+        "command": "daily-work-log.aiGenerateAll",
+        "title": "AI 润色与总结",
+        "category": "Work Log"
+      },
+      {
+        "command": "daily-work-log.openPanelSettings",
+        "title": "系统设置",
+        "category": "Work Log",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "daily-work-log.refresh",
+        "title": "刷新",
+        "category": "Work Log",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "daily-work-log.openProfile",
+        "title": "个人中心",
+        "category": "Work Log",
+        "icon": "$(account)"
+      },
+      {
+        "command": "daily-work-log.openOutput",
+        "title": "打开日志",
+        "category": "Work Log",
+        "icon": "$(output)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "daily-work-log.refresh",
+          "when": "view == daily-work-log.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "daily-work-log.openProfile",
+          "when": "view == daily-work-log.chatView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "daily-work-log.openPanelSettings",
+          "when": "view == daily-work-log.chatView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "daily-work-log.openOutput",
+          "when": "view == daily-work-log.chatView",
+          "group": "navigation@4"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Daily Work Log",
+      "properties": {
+        "dailyWorkLog.storagePath": {
+          "type": "string",
+          "default": "~/.work-logs",
+          "description": "工作日志存储位置"
+        },
+        "dailyWorkLog.autoSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "编辑后自动保存日报"
+        },
+        "dailyWorkLog.preview.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否启用日报/月报 Markdown 预览"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "daily-work-log.openForm",
+        "key": "ctrl+alt+d",
+        "mac": "cmd+alt+d",
+        "when": "editorFocus || explorerViewletFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "node esbuild.mjs && node scripts/build-webview.mjs",
+    "build:webview": "node scripts/build-webview.mjs",
+    "install:all": "npm install && npm --prefix web install",
+    "build:all": "npm run compile",
+    "watch": "node esbuild.mjs --watch",
+    "watch:webview": "npm --prefix web run build -- --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "package": "node scripts/release/package.mjs",
+    "package:force": "node scripts/release/package.mjs --force",
+    "release:status": "node scripts/release/status.mjs",
+    "release": "node scripts/release/index.mjs patch",
+    "release:patch": "node scripts/release/index.mjs patch",
+    "release:minor": "node scripts/release/index.mjs minor",
+    "release:major": "node scripts/release/index.mjs major",
+    "release:app": "node scripts/release-app.mjs",
+    "release:app:status": "node scripts/release/status.mjs",
+    "compile-tests": "tsc -p tsconfig.json --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint -c eslint.config.mjs src web/src",
+    "test": "vscode-test",
+    "publish:marketplace": "npm run compile && npx vsce publish --no-yarn --no-dependencies --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.7",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@types/vscode": "^1.103.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.21.5",
+    "eslint": "^9.39.2",
+    "lerna": "^8.1.9",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.52.0"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "markdown-it": "^14.1.0"
+  }
+}

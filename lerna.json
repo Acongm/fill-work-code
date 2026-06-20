@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/lerna/schemas/lerna-schema.json",
+  "version": "0.1.5",
+  "npmClient": "npm",
+  "packages": [
+    "."
+  ],
+  "command": {
+    "version": {
+      "allowBranch": [
+        "main",
+        "feat/*",
+        "fix/*",
+        "chore/*"
+      ],
+      "conventionalCommits": false,
+      "gitTagVersion": false,
+      "message": "chore(release): publish %s",
+      "push": false
+    }
+  }
+}

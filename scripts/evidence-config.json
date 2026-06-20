@@ -1,0 +1,10 @@
+{
+  "month": "2026/04",
+  "searchRoots": [],
+  "originFilters": [],
+  "authorAliases": [],
+  "outputDir": "./scripts",
+  "skillScriptsDir": "~/.agents/skills/collect-monthly-timesheet/scripts",
+  "projectName": "星巴克研发效能平台",
+  "defaultHours": 8
+}
