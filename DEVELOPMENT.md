@@ -108,7 +108,18 @@ yarn release:app --help
 | `ci.yml` | push / PR 到 `main` | compile + lint + typecheck |
 | `publish-extension.yml` | 推送 tag `v*` 或手动触发 | 发布到 VS Code Marketplace |
 
-**前置条件**：在 GitHub 仓库 Settings → Secrets and variables → Actions 中添加 **`VSCE_PAT`**（Marketplace Manage scope）。
+**前置条件**：在 GitHub 仓库配置 **`VSCE_PAT`**（Azure DevOps PAT，Scope: Marketplace → Manage）。
+
+> **注意**：GitHub Actions **不会**读取你本机 shell 里的 `export VSCE_PAT=...`，必须在 GitHub 网页配置。
+
+| 配置位置 | Workflow 能否读取 | 推荐 |
+|----------|-------------------|------|
+| Settings → Actions → **Secrets** | ✅ `secrets.VSCE_PAT` | **推荐** |
+| Settings → Actions → **Variables** | ✅ `vars.VSCE_PAT`（workflow 已兜底） | 可用但不推荐 |
+| Settings → **Environments** → Secrets | ⚠️ 需在 workflow 加 `environment: <名称>` | 可用 |
+| 本机 `~/.zshrc` 环境变量 | ❌ 无效 | — |
+
+Organization 级 Secret 还需在 Org 设置中 **授权给 `fill-work-code` 仓库**。
 
 **推荐发布流程**：
 

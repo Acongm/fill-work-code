@@ -12,6 +12,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # 若 VSCE_PAT 配在 GitHub Environment 的 Secrets 里，取消下行注释并改成你的 Environment 名称
+    # environment: production
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +34,29 @@ jobs:
           fi
           echo "Publishing version $PKG"
 
+      - name: Validate VSCE_PAT configuration
+        env:
+          PAT_FROM_SECRET: ${{ secrets.VSCE_PAT }}
+          PAT_FROM_VAR: ${{ vars.VSCE_PAT }}
+        run: |
+          if [ -n "$PAT_FROM_SECRET" ]; then
+            echo "VSCE_PAT source: repository/environment secret"
+            exit 0
+          fi
+          if [ -n "$PAT_FROM_VAR" ]; then
+            echo "::warning::VSCE_PAT 来自 Actions Variables。可用，但建议迁移到 Secrets 更安全。"
+            exit 0
+          fi
+          echo "::error::VSCE_PAT 为空。GitHub Actions 不会读取你电脑上的环境变量。"
+          echo ""
+          echo "请检查配置位置（三选一，名称必须 exactly: VSCE_PAT）："
+          echo "  A. Settings → Secrets and variables → Actions → Secrets → New repository secret"
+          echo "  B. 若配在 Environment Secrets：在本 workflow 的 publish job 添加 environment: <你的环境名>"
+          echo "  C. 若配在 Actions Variables：本 workflow 已支持 vars 兜底，确认变量名是 VSCE_PAT"
+          echo ""
+          echo "Organization secret 还需在 Org 设置里授权给本仓库。"
+          exit 1
+
       - name: Install dependencies
         run: npm run install:all
 
@@ -40,12 +65,9 @@ jobs:
 
       - name: Publish to Visual Studio Marketplace
         env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          # secrets 优先；若误配在 Variables 则使用 vars 兜底
+          VSCE_PAT: ${{ secrets.VSCE_PAT || vars.VSCE_PAT }}
         run: |
-          if [ -z "$VSCE_PAT" ]; then
-            echo "VSCE_PAT secret is not configured."
-            exit 1
-          fi
           npx vsce publish \
             --no-yarn \
             --no-dependencies \
