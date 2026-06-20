@@ -11,6 +11,10 @@ web/index.html
 web/src/**
 web/vite.config.ts
 .gitignore
+.env
+.env.*
+**/.env
+**/.env.*
 tsconfig.json
 eslint.config.mjs
 esbuild.mjs
