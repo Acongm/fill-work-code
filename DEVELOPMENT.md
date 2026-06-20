@@ -99,6 +99,15 @@ yarn release:app --help
 
 产物：`artifacts/daily-work-log-<version>.vsix`
 
+### Marketplace 发布
+
+**GitHub Secret `VSCE_PAT`** 仅在 GitHub Actions 中可用，本地终端不会自动读取。
+
+- 手动触发：GitHub → **Actions** → **Publish to VS Code Marketplace** → **Run workflow**
+- 打 tag 自动发布：`git tag v0.1.5 && git push origin v0.1.5`
+- 本地命令行：需在本机 `export VSCE_PAT=...` 后执行 `npm run publish:marketplace`
+- 无 PAT 时：在 [Publisher 管理页](https://marketplace.visualstudio.com/manage/publishers/acongm) 上传 `artifacts/daily-work-log-*.vsix`
+
 ### 分步发布
 
 ```bash
