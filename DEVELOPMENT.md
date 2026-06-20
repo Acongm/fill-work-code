@@ -121,6 +121,15 @@ yarn release:app --help
 
 Organization 级 Secret 还需在 Org 设置中 **授权给 `fill-work-code` 仓库**。
 
+**一键配置（本地 + GitHub Secret）**：
+
+```bash
+./scripts/configure-vsce-pat.sh
+# 按提示粘贴 Azure DevOps PAT（不要用占位符 xx）
+```
+
+仅写本地 `.env.local`：`./scripts/configure-vsce-pat.sh --local-only`
+
 **推荐发布流程**：
 
 ```bash
