@@ -177,7 +177,7 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint -c eslint.config.mjs src web/src",
     "test": "vscode-test",
-    "publish:marketplace": "npm run compile && npx vsce publish --no-yarn --no-dependencies --allow-missing-repository"
+    "publish:marketplace": "npm run compile && npx vsce publish --no-yarn --no-dependencies --allow-missing-repository --skip-duplicate"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
