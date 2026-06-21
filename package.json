@@ -2,7 +2,7 @@
   "name": "daily-work-log",
   "displayName": "Daily Work Log",
   "description": "Daily work log management with date-based organization, form collection, and AI summary generation",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "packageManager": "yarn@3.8.1",
   "publisher": "acongm",
   "engines": {
