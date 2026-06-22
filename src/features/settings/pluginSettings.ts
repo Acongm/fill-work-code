@@ -36,6 +36,19 @@ export interface PluginSettings {
   dailySyncFieldVisibility: boolean;
   /** 历史日期 Git 采集优先读缓存，跳过重复扫描 */
   gitCollectCacheEnabled: boolean;
+  /** Git 采集成功后自动进入 AI 润色确认 */
+  autoPolishAfterCollect: boolean;
+  /** 周末 commit 并入周一（Git 写入与 AI 润色统一） */
+  weekendRollforward: boolean;
+  /** 新窗口打开仓库 */
+  openRepoInNewWindow: boolean;
+  /** generate-evidence.mjs 并行 git log 数 */
+  gitLogConcurrency?: number;
+  timesheet: {
+    company: string;
+    approver: string;
+    defaultHours: number;
+  };
   email: {
     smtpHost: string;
     smtpPort: number;
@@ -47,9 +60,9 @@ export interface PluginSettings {
 }
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
-  displayName: '彭聪',
+  displayName: '',
   outputDir: '',
-  searchRoots: ['~/IdeaProjects', '~/code'],
+  searchRoots: ['~/code'],
   originFilters: [],
   authorAliases: [],
   timesheetContentField: 'ailog',
@@ -69,6 +82,15 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   visibleFields: [],
   dailySyncFieldVisibility: false,
   gitCollectCacheEnabled: true,
+  autoPolishAfterCollect: false,
+  weekendRollforward: false,
+  openRepoInNewWindow: false,
+  gitLogConcurrency: 4,
+  timesheet: {
+    company: '',
+    approver: '',
+    defaultHours: 8,
+  },
   email: {
     smtpHost: '',
     smtpPort: 587,

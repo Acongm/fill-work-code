@@ -6,7 +6,7 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   workLogManager: WorkLogManager
 ) {
-  // 打开日报表单
+  // @deprecated 请使用侧边栏 ChatView；保留供兼容旧命令
   const openFormCommand = vscode.commands.registerCommand(
     'daily-work-log.openForm',
     () => {

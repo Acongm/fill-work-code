@@ -369,10 +369,12 @@ async function stepFindGitRoots(skillDir, config) {
     console.log(`[1/8] 查找 Git 仓库（证据月 ${monthLabel}，活动起点 ${sinceDate}）...`);
   }
   const output = await runBash(script, args);
-  const repos = output.trim().split('\n').filter(Boolean);
-  console.log(`      共 ${repos.length} 个候选仓库。`);
+  const discovered = output.trim().split('\n').filter(Boolean);
+  const known = Array.isArray(config.knownRepoRoots) ? config.knownRepoRoots : [];
+  const merged = [...new Set([...known, ...discovered])];
+  console.log(`      共 ${merged.length} 个候选仓库（registry ${known.length} + discover ${discovered.length}）。`);
 
-  return writeTmp('repos.txt', repos.join('\n') + '\n');
+  return writeTmp('repos.txt', merged.join('\n') + '\n');
 }
 
 async function stepListRepoOrigins(skillDir, reposFile) {
@@ -490,6 +492,115 @@ function ensureRepoRefsFetched(repoRoot) {
   }
 }
 
+function dedupeTsvLines(lines) {
+  const byKey = new Map();
+  for (const line of lines) {
+    const cols = parseTsvLine(line);
+    if (cols.length < 4) {
+      continue;
+    }
+    const origin = cols[2] || cols[0];
+    const sha = cols[3];
+    if (!sha) {
+      continue;
+    }
+    byKey.set(`${origin}\0${sha}`, line);
+  }
+  return [...byKey.values()];
+}
+
+async function mapPool(items, concurrency, fn) {
+  const results = new Array(items.length);
+  let index = 0;
+  async function worker() {
+    while (index < items.length) {
+      const i = index;
+      index += 1;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = Math.min(Math.max(1, concurrency), items.length || 1);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return results;
+}
+
+function exportRepoCommits(repoRoot, config, authorAliases, since, before, targetDates) {
+  ensureRepoRefsFetched(repoRoot);
+  const repoName = repoRoot.split('/').pop();
+  let originUrl = '';
+  try {
+    originUrl = execFileSync('git', ['-C', repoRoot, 'config', '--get', 'remote.origin.url'], {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch {
+    // no origin
+  }
+
+  let logOutput;
+  try {
+    logOutput = execFileSync(
+      'git',
+      [
+        '-C', repoRoot,
+        'log', '--all', '--reverse', '--date-order', '--no-merges',
+        '--format=COMMIT_SEP%n%H%x09%ct%x09%cI%x09%an%x09%ae%x09%s',
+        '--name-only',
+        `--since=${gitDayStart(since)}`,
+        `--until=${gitDayStart(before)}`,
+      ],
+      { encoding: 'utf-8', maxBuffer: 100 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+  } catch {
+    return { lines: [], skippedByAuthor: 0 };
+  }
+
+  const tsvLines = [];
+  let skippedByAuthor = 0;
+  const commitBlocks = logOutput.split('COMMIT_SEP\n').filter(Boolean);
+
+  for (const block of commitBlocks) {
+    const lines = block.split('\n');
+    if (lines.length === 0) continue;
+
+    const headerLine = lines[0];
+    const headerParts = headerLine.split('\t');
+    if (headerParts.length < 6) continue;
+
+    const [commitSha, , commitAt, authorName, authorEmail, subject] = headerParts;
+
+    if (subject.startsWith('Revert ')) continue;
+
+    if (!commitMatchesAuthor(authorName, authorEmail, authorAliases)) {
+      skippedByAuthor += 1;
+      continue;
+    }
+
+    const changedFiles = lines.slice(1).filter((l) => l.trim() !== '');
+    const topDirSet = new Set();
+    for (const f of changedFiles) {
+      const slashIdx = f.indexOf('/');
+      topDirSet.add(slashIdx === -1 ? '(root)' : f.substring(0, slashIdx));
+    }
+    const topDirs = [...topDirSet].sort().join(',');
+    const filesStr = changedFiles.join(',');
+
+    const commitDay = commitAt.split('T')[0].replace(/-/g, '/');
+    const commitIso = commitDayToIso(commitDay);
+    if (targetDates && !targetDates.has(commitIso)) {
+      continue;
+    }
+
+    tsvLines.push(
+      [repoRoot, repoName, originUrl, commitSha, commitAt, commitDay, authorName, authorEmail, subject, topDirs, filesStr]
+        .map((v) => v.replace(/\\/g, '\\\\').replace(/\t/g, '\\t').replace(/\n/g, '\\n').replace(/\r/g, '\\r'))
+        .join('\t'),
+    );
+  }
+
+  return { lines: tsvLines, skippedByAuthor };
+}
+
 async function stepExportCommitsInRange(config, reposFile, authorAliases) {
   const scoped = isScopedCollect(config);
   const [y, m] = config.month.split('/');
@@ -510,7 +621,7 @@ async function stepExportCommitsInRange(config, reposFile, authorAliases) {
   }
 
   const repos = readFileSync(reposFile, 'utf-8').trim().split('\n').filter(Boolean);
-  const tsvLines = [];
+  const concurrency = Number(config.gitLogConcurrency) > 0 ? Number(config.gitLogConcurrency) : 4;
   let skippedByAuthor = 0;
 
   if (!authorAliases.length) {
@@ -519,85 +630,22 @@ async function stepExportCommitsInRange(config, reposFile, authorAliases) {
     return { commitsFile, rawOutput: '' };
   }
 
-  for (const repoRoot of repos) {
-    ensureRepoRefsFetched(repoRoot);
-    const repoName = repoRoot.split('/').pop();
-    let originUrl = '';
-    try {
-      originUrl = execFileSync('git', ['-C', repoRoot, 'config', '--get', 'remote.origin.url'], {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
-    } catch {
-      // no origin
-    }
+  console.log(`      并行扫描 ${repos.length} 个仓库（concurrency=${concurrency}）…`);
 
-    // Single git log call: get commit info + changed files via --name-only
-    // Delimiter COMMIT_SEP separates commits
-    let logOutput;
-    try {
-      logOutput = execFileSync(
-        'git',
-        [
-          '-C', repoRoot,
-          'log', '--all', '--reverse', '--date-order', '--no-merges',
-          '--format=COMMIT_SEP%n%H%x09%ct%x09%cI%x09%an%x09%ae%x09%s',
-          '--name-only',
-          `--since=${gitDayStart(since)}`,
-          `--until=${gitDayStart(before)}`,
-        ],
-        { encoding: 'utf-8', maxBuffer: 100 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }
-      );
-    } catch {
-      continue;
-    }
+  const chunks = await mapPool(repos, concurrency, async (repoRoot) => {
+    const result = exportRepoCommits(
+      repoRoot,
+      config,
+      authorAliases,
+      since,
+      before,
+      targetDates,
+    );
+    return result;
+  });
 
-    // Parse the output: split by COMMIT_SEP
-    const commitBlocks = logOutput.split('COMMIT_SEP\n').filter(Boolean);
-
-    for (const block of commitBlocks) {
-      const lines = block.split('\n');
-      if (lines.length === 0) continue;
-
-      const headerLine = lines[0];
-      const headerParts = headerLine.split('\t');
-      if (headerParts.length < 6) continue;
-
-      const [commitSha, , commitAt, authorName, authorEmail, subject] = headerParts;
-
-      // Skip revert commits
-      if (subject.startsWith('Revert ')) continue;
-
-      if (!commitMatchesAuthor(authorName, authorEmail, authorAliases)) {
-        skippedByAuthor += 1;
-        continue;
-      }
-
-      // Changed files are remaining non-empty lines
-      const changedFiles = lines.slice(1).filter((l) => l.trim() !== '');
-
-      // Top dirs
-      const topDirSet = new Set();
-      for (const f of changedFiles) {
-        const slashIdx = f.indexOf('/');
-        topDirSet.add(slashIdx === -1 ? '(root)' : f.substring(0, slashIdx));
-      }
-      const topDirs = [...topDirSet].sort().join(',');
-      const filesStr = changedFiles.join(',');
-
-      const commitDay = commitAt.split('T')[0].replace(/-/g, '/');
-      const commitIso = commitDayToIso(commitDay);
-      if (targetDates && !targetDates.has(commitIso)) {
-        continue;
-      }
-
-      tsvLines.push(
-        [repoRoot, repoName, originUrl, commitSha, commitAt, commitDay, authorName, authorEmail, subject, topDirs, filesStr]
-          .map((v) => v.replace(/\\/g, '\\\\').replace(/\t/g, '\\t').replace(/\n/g, '\\n').replace(/\r/g, '\\r'))
-          .join('\t')
-      );
-    }
-  }
+  const tsvLines = dedupeTsvLines(chunks.flatMap((chunk) => chunk.lines));
+  skippedByAuthor = chunks.reduce((sum, chunk) => sum + chunk.skippedByAuthor, 0);
 
   const output = tsvLines.join('\n') + (tsvLines.length > 0 ? '\n' : '');
   const commitsFile = writeTmp('commits.tsv', output);

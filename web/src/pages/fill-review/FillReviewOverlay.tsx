@@ -2,33 +2,19 @@ import * as React from 'react';
 import { OverlayHeader } from '../../components/ui/OverlayHeader';
 import { EditableItemList } from '../../components/ui/EditableItemList';
 import {
+  CommitItem,
+  parseGitCommitLine,
+  syncGitlogWithCommits,
+} from '../../components/fill-review/CommitItem';
+import {
   collectRequestFromPreview,
   formatFillAnchorLabel,
   resolveCustomRange,
 } from '@host-utils/fillAnchor';
+import type { FillPreview, FillPreviewDay } from '@host-utils/types/fillPreview';
 
-export interface FillPreviewDay {
-  date: string;
-  completed: string[];
-  gitlog: string[];
-  gitCommit: string[];
-  originUrl: string[];
-  ailogDraft: string[];
-  warnings: string[];
-}
-
+export type { FillPreview, FillPreviewDay } from '@host-utils/types/fillPreview';
 export type FillPreviewSource = 'git' | 'ai';
-
-export interface FillPreview {
-  scope: string;
-  anchorDate?: string;
-  rangeStart?: string;
-  rangeEnd?: string;
-  dates: string[];
-  days: FillPreviewDay[];
-  source?: FillPreviewSource;
-  error?: string;
-}
 
 interface FillReviewOverlayProps {
   preview: FillPreview;
@@ -37,6 +23,10 @@ interface FillReviewOverlayProps {
   onApplyGit: () => void;
   onApplyAi: () => void;
   onRepolish: () => void;
+}
+
+function dayIncluded(day: FillPreviewDay): boolean {
+  return day.includeInApply !== false;
 }
 
 export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
@@ -56,6 +46,17 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
       i === index ? { ...day, ...patch } : day,
     );
     onChange({ ...preview, days });
+  };
+
+  const toggleCommit = (dayIndex: number, line: string, checked: boolean) => {
+    if (checked) {
+      return;
+    }
+    const day = preview.days[dayIndex];
+    const selected = new Set(day.gitCommit.map((entry) => entry.trim()));
+    selected.delete(line.trim());
+    const synced = syncGitlogWithCommits(day.gitlog, day.gitCommit, selected);
+    updateDay(dayIndex, synced);
   };
 
   const scopeLabel =
@@ -89,15 +90,50 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
       <div className="overlay-body fill-review-body">
         <p className="fill-review-note">
           {isGitStep
-            ? '确认 Git 采集结果后写入 GitLog、GitCommit 与相关仓库。「今日完成」仅在日报页手动维护。'
+            ? '确认 Git 采集结果后写入 GitLog、GitCommit 与相关仓库。可勾选 commit 与按天决定是否写入。'
             : '确认 AI 润色结果后写入 AILog。基于已有 Git 采集数据润色，不会重复执行脚本采集。'}
         </p>
         {preview.error && <div className="warning">{preview.error}</div>}
         {preview.days.map((day, index) => (
           <section key={day.date} className="fill-day">
-            <h4>{day.date}</h4>
+            <div className="fill-day-header">
+              <h4>{day.date}</h4>
+              <label className="fill-day-include">
+                <input
+                  type="checkbox"
+                  checked={dayIncluded(day)}
+                  onChange={(e) =>
+                    updateDay(index, { includeInApply: e.target.checked })
+                  }
+                />
+                写入此日
+              </label>
+            </div>
             {isGitStep && (
               <>
+                <EditableItemList
+                  label="今日完成（可选，写入 completed）"
+                  hint="手动维护的完成项，会随 Git 字段一并保存"
+                  items={day.completed}
+                  onChange={(completed) => updateDay(index, { completed })}
+                />
+                {day.gitCommit.length > 0 && (
+                  <div className="commit-picker">
+                    <div className="editable-list-label">Commit 勾选</div>
+                    <p className="setting-hint">取消勾选将从 GitCommit / GitLog 中移除</p>
+                    {day.gitCommit.map((line) => {
+                      const parsed = parseGitCommitLine(line);
+                      return (
+                        <CommitItem
+                          key={line}
+                          commit={parsed}
+                          checked
+                          onChange={(checked) => toggleCommit(index, line, checked)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
                 <EditableItemList
                   label="GitLog（整理后，写入 gitlog）"
                   hint="按仓库合并的 commit 摘要"

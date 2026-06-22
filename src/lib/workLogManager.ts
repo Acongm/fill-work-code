@@ -1,25 +1,9 @@
-import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import type { DailyLog, MonthlyLog } from '../utils/types/dailyLog';
 
-export interface DailyLog {
-  date: string; // YYYY-MM-DD format
-  completed: string[]; // 今日完成的任务
-  plan: string[]; // 明日计划
-  blockers: string[]; // 阻碍或问题
-  notes: string; // 其他备注
-  gitlog?: string[]; // Git 日报清单
-  ailog?: string[]; // AI 润色/总结
-  gitCommit?: string[]; // Git commit messages (原始提交信息)
-  origin_url?: string[]; // 相关仓库
-}
-
-export interface MonthlyLog {
-  year: number;
-  month: number; // 1-12
-  logs: DailyLog[];
-}
+export type { DailyLog, MonthlyLog } from '../utils/types/dailyLog';
 
 /**
  * 展开路径中的 ~ 为用户主目录

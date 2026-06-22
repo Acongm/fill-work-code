@@ -285,35 +285,50 @@ export class AiPolishService {
       `[AI] 开始润色 ${days.length} 天 | model=${settings.aiModel || preset.defaultModel} | 输出通俗日报 AILog（非 commit 翻译）`,
     );
 
-    const polishInputs = buildAiPolishDayInputs(days);
+    const polishInputs = settings.weekendRollforward
+      ? buildAiPolishDayInputs(days)
+      : days;
     const resultByDate = new Map<string, FillPreviewDay>(
       days.map((day) => [day.date, { ...day }]),
     );
     const total = polishInputs.length;
-    for (let i = 0; i < polishInputs.length; i += 1) {
-      const day = polishInputs[i];
-      onProgress?.(`润色 ${day.date} (${i + 1}/${total})…`);
-      const enriched = {
-        ...day,
-        completed: day.completed.length
-          ? day.completed
-          : existingLogs[day.date]?.completed || [],
-        gitlog: day.gitlog.length
-          ? day.gitlog
-          : existingLogs[day.date]?.gitlog || [],
-        gitCommit: day.gitCommit.length
-          ? day.gitCommit
-          : existingLogs[day.date]?.gitCommit || [],
-      };
-      const polished = await this.polishDay(enriched, settings, apiKey, onProgress);
-      resultByDate.set(day.date, {
-        ...(resultByDate.get(day.date) || day),
-        ...polished,
-        date: day.date,
-      });
-    }
-    const rolled = applyWeekendAilogRollforward([...resultByDate.values()]);
-    onProgress?.(`[AI] 润色完成，共 ${rolled.length} 天（周末提交已按周一归类）`);
+    const concurrency = 2;
+    let index = 0;
+    const worker = async () => {
+      while (index < polishInputs.length) {
+        const i = index;
+        index += 1;
+        const day = polishInputs[i];
+        onProgress?.(`润色 ${day.date} (${i + 1}/${total})…`);
+        const enriched = {
+          ...day,
+          completed: day.completed.length
+            ? day.completed
+            : existingLogs[day.date]?.completed || [],
+          gitlog: day.gitlog.length
+            ? day.gitlog
+            : existingLogs[day.date]?.gitlog || [],
+          gitCommit: day.gitCommit.length
+            ? day.gitCommit
+            : existingLogs[day.date]?.gitCommit || [],
+        };
+        const polished = await this.polishDay(enriched, settings, apiKey, onProgress);
+        resultByDate.set(day.date, {
+          ...(resultByDate.get(day.date) || day),
+          ...polished,
+          date: day.date,
+        });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, total) }, () => worker()));
+    const rolled = settings.weekendRollforward
+      ? applyWeekendAilogRollforward([...resultByDate.values()])
+      : [...resultByDate.values()];
+    onProgress?.(
+      settings.weekendRollforward
+        ? `[AI] 润色完成，共 ${rolled.length} 天（周末提交已按周一归类）`
+        : `[AI] 润色完成，共 ${rolled.length} 天`,
+    );
     return rolled;
   }
 }

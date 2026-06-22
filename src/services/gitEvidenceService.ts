@@ -5,6 +5,7 @@ import * as os from 'os';
 import {
   type CollectRequest,
   formatFillAnchorLabel,
+  narrowCollectRequestToDates,
   resolveCollectDates,
   resolveCustomRange,
   resolveFillDateRange,
@@ -14,6 +15,21 @@ import type { DailyLog } from '../lib/workLogManager';
 import type { PluginSettings } from '../features/settings/pluginSettings';
 import { resolveAuthorAliasesForCollect } from '../utils/gitAuthorFilter';
 import { resolveOriginFilters } from '../utils/originFilter';
+import { parseCommitsTsv } from '../utils/parseCommitsTsv';
+import { dedupeCommitsBySha } from '../utils/dedupeCommits';
+import { loadRegistry, getKnownRepoRoots, upsertFromTsv } from '../utils/repoRegistry';
+import {
+  buildFillCacheSearchConfig,
+  fillCacheConfigHash,
+  monthKeysForDates,
+} from './fillCacheService';
+import {
+  datesNeedingScan,
+  loadGitEvidenceMeta,
+  markFrozenDates,
+  mergeTsvContent,
+  saveGitEvidenceMeta,
+} from '../utils/commitsTsvStore';
 
 export { resolveFillDateRange, resolveFillDates } from '../utils/fillAnchor';
 
@@ -84,22 +100,64 @@ export class GitEvidenceService {
     existingLogs: Record<string, DailyLog | null>,
     onLog?: (line: string) => void,
   ): Promise<FillPreview> {
-    const customRange = resolveCustomRange(request);
     const dates = resolveCollectDates(request);
-    const monthKey = (customRange?.start ?? request.anchorDate).slice(0, 7);
     const outputDir = settings.outputDir.trim()
       ? expandHome(settings.outputDir)
       : expandHome(this.storagePath);
-    const monthDir = path.join(outputDir, monthKey);
-    const gitlogDir = path.join(monthDir, 'gitlog');
-    fs.mkdirSync(gitlogDir, { recursive: true });
+    const searchConfig = buildFillCacheSearchConfig(settings);
+    const configHash = fillCacheConfigHash(searchConfig);
+    const forceRescan = request.forceRescan ?? false;
+    const monthKeys = monthKeysForDates(dates);
 
     try {
-      await this.runEvidenceScript(monthKey, outputDir, settings, request, onLog);
-      const artifactsSrc = path.join(monthDir, '_artifacts.tsv');
-      const artifactsDest = path.join(gitlogDir, '产物清单.tsv');
-      if (fs.existsSync(artifactsSrc)) {
-        fs.copyFileSync(artifactsSrc, artifactsDest);
+      for (const monthKey of monthKeys) {
+        const monthDates = dates.filter((date) => date.startsWith(monthKey));
+        const monthDir = path.join(outputDir, monthKey);
+        const gitlogDir = path.join(monthDir, 'gitlog');
+        fs.mkdirSync(gitlogDir, { recursive: true });
+
+        const commitsPath = path.join(monthDir, '_commits.tsv');
+        const meta = loadGitEvidenceMeta(monthDir);
+        const needing = datesNeedingScan(monthDates, meta, configHash, forceRescan);
+        const existingContent = fs.existsSync(commitsPath)
+          ? fs.readFileSync(commitsPath, 'utf-8')
+          : '';
+
+        if (needing.length === 0) {
+          onLog?.(
+            `[TSV 缓存] ${monthKey} 范围内 ${monthDates.length} 天均已冻结，跳过 Git 扫描`,
+          );
+          continue;
+        }
+
+        const frozenCount = monthDates.length - needing.length;
+        if (frozenCount > 0) {
+          onLog?.(
+            `[TSV 缓存] ${monthKey} 复用 ${frozenCount} 天冻结数据，增量扫描: ${needing.join(', ')}`,
+          );
+        }
+
+        const scanRequest = narrowCollectRequestToDates(request, needing);
+        await this.runEvidenceScript(monthKey, outputDir, settings, scanRequest, onLog);
+
+        const incomingContent = fs.readFileSync(commitsPath, 'utf-8');
+        const frozenSet =
+          !forceRescan && meta.configHash === configHash
+            ? new Set(meta.frozenDates)
+            : new Set<string>();
+        const scanSet = new Set(needing);
+        const merged = mergeTsvContent(existingContent, incomingContent, frozenSet, scanSet);
+        fs.writeFileSync(commitsPath, merged, 'utf-8');
+        upsertFromTsv(outputDir, commitsPath);
+
+        const updatedMeta = markFrozenDates(meta, needing, configHash);
+        saveGitEvidenceMeta(monthDir, updatedMeta);
+
+        const artifactsSrc = path.join(monthDir, '_artifacts.tsv');
+        const artifactsDest = path.join(gitlogDir, '产物清单.tsv');
+        if (fs.existsSync(artifactsSrc)) {
+          fs.copyFileSync(artifactsSrc, artifactsDest);
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -115,15 +173,43 @@ export class GitEvidenceService {
       };
     }
 
-    const commitsPath = path.join(monthDir, '_commits.tsv');
-    const dailyGitlog = {
-      ...this.parseDailyGitlogMarkdown(path.join(gitlogDir, '工作日报清单.md')),
-      ...this.parseGitlogFromCommits(commitsPath),
-    };
-    const dailyCommits = this.parseDailyCommitsFromTsv(commitsPath);
-    const dailyOrigins = this.parseDailyOriginsFromCommits(commitsPath);
+    const days = this.buildDaysFromCommits(dates, outputDir, existingLogs);
 
-    const days = dates.map((date) => {
+    return {
+      scope: request.scope,
+      anchorDate: request.anchorDate,
+      rangeStart: request.rangeStart,
+      rangeEnd: request.rangeEnd,
+      dates,
+      days,
+      collectedAt: new Date().toISOString(),
+    };
+  }
+
+  private buildDaysFromCommits(
+    dates: string[],
+    outputDir: string,
+    existingLogs: Record<string, DailyLog | null>,
+  ): FillPreviewDay[] {
+    const monthKeys = monthKeysForDates(dates);
+    let dailyGitlog: Record<string, string[]> = {};
+    let dailyCommits: Record<string, string[]> = {};
+    let dailyOrigins: Record<string, string[]> = {};
+
+    for (const monthKey of monthKeys) {
+      const monthDir = path.join(outputDir, monthKey);
+      const commitsPath = path.join(monthDir, '_commits.tsv');
+      const gitlogDir = path.join(monthDir, 'gitlog');
+      dailyGitlog = {
+        ...this.parseDailyGitlogMarkdown(path.join(gitlogDir, '工作日报清单.md')),
+        ...dailyGitlog,
+        ...this.parseGitlogFromCommits(commitsPath),
+      };
+      dailyCommits = { ...dailyCommits, ...this.parseDailyCommitsFromTsv(commitsPath) };
+      dailyOrigins = { ...dailyOrigins, ...this.parseDailyOriginsFromCommits(commitsPath) };
+    }
+
+    return dates.map((date) => {
       const existing = existingLogs[date];
       const warnings: string[] = [];
       const gitlog = dailyGitlog[date] || [];
@@ -142,16 +228,6 @@ export class GitEvidenceService {
         warnings,
       };
     });
-
-    return {
-      scope: request.scope,
-      anchorDate: request.anchorDate,
-      rangeStart: request.rangeStart,
-      rangeEnd: request.rangeEnd,
-      dates,
-      days,
-      collectedAt: new Date().toISOString(),
-    };
   }
 
   private runEvidenceScript(
@@ -163,7 +239,11 @@ export class GitEvidenceService {
   ): Promise<void> {
     const scriptPath = path.join(this.extensionPath, 'scripts', 'generate-evidence.mjs');
     const bashDir = path.join(this.extensionPath, 'scripts', 'bash');
-    const configPath = path.join(this.extensionPath, 'scripts', '.collect-config.json');
+    const runtimeDir = path.join(outputDir, '.runtime');
+    fs.mkdirSync(runtimeDir, { recursive: true });
+    const configPath = path.join(runtimeDir, 'collect-config.json');
+    const registry = loadRegistry(outputDir);
+    const knownRepoRoots = getKnownRepoRoots(registry);
     const [year, month] = monthKey.split('-');
     const config = {
       month: `${year}/${month}`,
@@ -187,6 +267,8 @@ export class GitEvidenceService {
           targetDates: range.dates,
         };
       })(),
+      knownRepoRoots,
+      gitLogConcurrency: settings.gitLogConcurrency ?? 4,
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
 
@@ -363,31 +445,18 @@ export class GitEvidenceService {
     if (!fs.existsSync(filePath)) {
       return byDay;
     }
-    for (const line of fs.readFileSync(filePath, 'utf-8').split(/\r?\n/)) {
-      if (!line.trim()) {
-        continue;
-      }
-      const cols = line.split('\t');
-      if (cols.length < 9) {
-        continue;
-      }
-      const repoName = cols[1]?.trim();
-      const originUrl = cols[2]?.trim();
-      const sha = cols[3]?.trim() || '';
-      const commitDay = cols[5]?.trim();
-      const subject = cols[8]?.trim();
-      if (!commitDay || !subject) {
-        continue;
-      }
-      const date = normalizeCommitDay(commitDay);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const deduped = dedupeCommitsBySha(parseCommitsTsv(content));
+    for (const row of deduped) {
+      const date = normalizeCommitDay(row.commitDay);
       if (!byDay[date]) {
         byDay[date] = [];
       }
       byDay[date].push({
-        repoName: repoName || 'unknown',
-        originUrl: originUrl || '',
-        subject,
-        sha,
+        repoName: row.repoName || 'unknown',
+        originUrl: row.originUrl || '',
+        subject: row.subject,
+        sha: row.sha,
       });
     }
     return byDay;

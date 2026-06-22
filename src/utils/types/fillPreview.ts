@@ -11,6 +11,8 @@ export interface FillPreviewDay {
   warnings: string[];
   appliedGit?: boolean;
   appliedAi?: boolean;
+  /** 确认页是否写入此日（默认 true） */
+  includeInApply?: boolean;
 }
 
 export interface FillPreview {

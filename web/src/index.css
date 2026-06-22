@@ -691,3 +691,175 @@ body {
 .btn--danger:hover {
   background: var(--vscode-inputValidation-errorBackground);
 }
+
+.profile-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.profile-tab {
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-size: 11px;
+  border-bottom: 2px solid transparent;
+}
+
+.profile-tab.active {
+  color: var(--vscode-textLink-activeForeground);
+  border-bottom-color: var(--vscode-textLink-activeForeground);
+}
+
+.repo-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.repo-list-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.repo-clone-badge {
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.repo-list-item-url {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  word-break: break-all;
+}
+
+.clone-tag-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.clone-tag {
+  padding: 2px 8px;
+  font-size: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+}
+
+.clone-tag.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.repo-clone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.repo-commit-line,
+.repo-ailog-line {
+  font-size: 10px;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.repo-commit-date {
+  color: var(--vscode-descriptionForeground);
+  margin-right: 6px;
+}
+
+.repo-day-group {
+  margin-bottom: 10px;
+}
+
+.repo-day-heading {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--vscode-editor-foreground);
+}
+
+.repo-activity-primary {
+  margin-bottom: 12px;
+}
+
+.repo-activity-secondary {
+  border-top: 1px solid var(--vscode-panel-border);
+  padding-top: 8px;
+}
+
+.repo-toggle-commits {
+  margin-bottom: 8px;
+}
+
+.empty-hint {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  padding: 12px 0;
+}
+
+.collect-cache-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.repo-list-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fill-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fill-day-include {
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.commit-picker {
+  margin-bottom: 8px;
+}
+
+.commit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 10px;
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.commit-item-subject {
+  flex: 1;
+  word-break: break-word;
+}
+
+.commit-item code {
+  font-size: 10px;
+}

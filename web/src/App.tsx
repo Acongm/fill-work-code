@@ -21,10 +21,11 @@ import {
   formatFillAnchorLabel,
   normalizeCustomRange,
   resolveCustomRange,
+  transitionCollectView,
+  collectViewStateFromParts,
 } from '@host-utils/fillAnchor';
 import type { SecretMeta } from './components/ui/SecretField';
-
-// ============ 类型定义 ============
+import { vscode } from './vscodeApi';
 interface DailyLog {
   date: string;
   completed: string[];
@@ -74,18 +75,15 @@ interface AppConfig {
 type TabType = 'today' | 'summary' | 'materials';
 type EditableArrayField = 'completed' | 'plan' | 'blockers' | 'gitlog' | 'ailog' | 'gitCommit' | 'origin_url';
 
-// ============ VS Code API ============
-declare function acquireVsCodeApi(): {
-  postMessage: (message: any) => void;
-  getState: () => any;
-  setState: (state: any) => void;
-};
+interface WebviewPersistedState {
+  tab?: TabType;
+  logDate?: string;
+  collectView?: CollectView;
+  collectRangeStart?: string;
+  collectRangeEnd?: string;
+}
 
-const vscode = (typeof acquireVsCodeApi !== 'undefined') 
-  ? acquireVsCodeApi() 
-  : { postMessage: console.log, getState: () => ({}), setState: () => {} };
-
-// ============ 工具函数 ============
+// ============ 类型定义 ============
 function getTodayStr(): string {
   const d = new Date();
   const year = d.getFullYear();
@@ -142,7 +140,7 @@ const S = {
   select: { padding: '4px', background: 'var(--vscode-input-background)', color: 'var(--vscode-input-foreground)', border: '1px solid var(--vscode-input-border)', borderRadius: '3px', fontSize: '11px' },
   summaryItem: { padding: '6px', background: 'var(--vscode-list-hoverBackground)', margin: '4px 0', borderRadius: '3px', fontSize: '10px', display: 'flex', gap: '6px', alignItems: 'flex-start', justifyContent: 'space-between' },
   summaryDate: { fontWeight: 600, marginBottom: '4px', color: 'var(--vscode-editor-foreground)' },
-  summaryTasks: { color: 'var(--vscode-descriptionForeground)', lineHeight: 1.4 },
+  summaryTasks: { color: 'var(--vscode-descriptionForeground)', lineHeight: 1.4, whiteSpace: 'pre-wrap' as const },
   summaryContainer: { display: 'flex', gap: '8px', height: '100%' },
   summaryLeft: { flex: '0 0 45%', display: 'flex', flexDirection: 'column' as const },
   summaryRight: { flex: 1, display: 'flex', flexDirection: 'column' as const },
@@ -158,8 +156,21 @@ const S = {
 
 // ============ 主组件 ============
 export const App: React.FC = () => {
-  const [tab, setTab] = useState<TabType>('today');
-  const [log, setLog] = useState<DailyLog>({ date: getTodayStr(), completed: [], plan: [], blockers: [], notes: '', gitlog: [], ailog: [], gitCommit: [], origin_url: [] });
+  const savedState = (vscode.getState() ?? {}) as WebviewPersistedState;
+  const initialDate = savedState.logDate ?? getTodayStr();
+
+  const [tab, setTab] = useState<TabType>(savedState.tab ?? 'today');
+  const [log, setLog] = useState<DailyLog>({
+    date: initialDate,
+    completed: [],
+    plan: [],
+    blockers: [],
+    notes: '',
+    gitlog: [],
+    ailog: [],
+    gitCommit: [],
+    origin_url: [],
+  });
   const [config, setConfig] = useState<AppConfig>({ storagePath: '~/.work-logs', autoSave: true, aiEnabled: false });
   const [notification, setNotification] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -203,9 +214,14 @@ export const App: React.FC = () => {
     apiKey: null,
     emailPassword: null,
   });
-  const [collectView, setCollectView] = useState<CollectView>('day');
-  const [collectRangeStart, setCollectRangeStart] = useState(getTodayStr());
-  const [collectRangeEnd, setCollectRangeEnd] = useState(getTodayStr());
+  const [collectView, setCollectView] = useState<CollectView>(savedState.collectView ?? 'day');
+  const [collectRangeStart, setCollectRangeStart] = useState(
+    savedState.collectRangeStart ?? initialDate,
+  );
+  const [collectRangeEnd, setCollectRangeEnd] = useState(
+    savedState.collectRangeEnd ?? initialDate,
+  );
+  const [collectCacheHit, setCollectCacheHit] = useState(false);
   const [collectLoading, setCollectLoading] = useState<CollectLoadingState>({
     active: false,
     title: '',
@@ -213,6 +229,11 @@ export const App: React.FC = () => {
     feedItems: [],
   });
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tabRef = useRef(tab);
+  const loadDateRef = useRef<(dateStr: string) => void>(() => {});
+  const loadMonthRef = useRef<() => void>(() => {});
+
+  tabRef.current = tab;
 
   const notify = useCallback((msg: string) => {
     setNotification(msg);
@@ -223,7 +244,7 @@ export const App: React.FC = () => {
     raw: any,
     defaultPrompt = '',
   ): PluginSettingsForm => ({
-    displayName: raw?.displayName || '彭聪',
+    displayName: raw?.displayName || 'User',
     outputDir: raw?.outputDir || '',
     searchRoots: (raw?.searchRoots || []).join(', '),
     originFilters: (
@@ -253,6 +274,14 @@ export const App: React.FC = () => {
     visibleFields: Array.isArray(raw?.visibleFields) ? raw.visibleFields : [],
     dailySyncFieldVisibility: !!raw?.dailySyncFieldVisibility,
     gitCollectCacheEnabled: raw?.gitCollectCacheEnabled !== false,
+    autoPolishAfterCollect: !!raw?.autoPolishAfterCollect,
+    weekendRollforward: !!raw?.weekendRollforward,
+    openRepoInNewWindow: !!raw?.openRepoInNewWindow,
+    timesheet: {
+      company: raw?.timesheet?.company || '',
+      approver: raw?.timesheet?.approver || '',
+      defaultHours: raw?.timesheet?.defaultHours ?? 8,
+    },
     email: {
       smtpHost: raw?.email?.smtpHost || '',
       smtpPort: raw?.email?.smtpPort || 587,
@@ -272,13 +301,27 @@ export const App: React.FC = () => {
     vscode.postMessage({ command: 'updateDailyPreview', date: dateStr });
   }, []);
 
+  loadDateRef.current = loadDate;
+
+  useEffect(() => {
+    vscode.setState({
+      tab,
+      logDate: log.date,
+      collectView,
+      collectRangeStart,
+      collectRangeEnd,
+    } satisfies WebviewPersistedState);
+  }, [tab, log.date, collectView, collectRangeStart, collectRangeEnd]);
+
   // 消息监听
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data;
       switch (msg.command) {
         case 'init':
-          if (msg.todayLog) { setLog(msg.todayLog); }
+          if (msg.todayLog) {
+            setLog(msg.todayLog);
+          }
           if (msg.repositoryOptions) { setRepositoryOptions(msg.repositoryOptions); }
           if (msg.config) { setConfig(msg.config); }
           setDirty(false);
@@ -314,8 +357,8 @@ export const App: React.FC = () => {
           notify(`✅ 导入完成: ${msg.imported} 条，跳过 ${msg.skipped} 条`);
           setImportPreview(null);
           setImportSelection({});
-          if (tab === 'summary') {
-            loadMonth();
+          if (tabRef.current === 'summary') {
+            loadMonthRef.current();
           }
           break;
         case 'fullConfigUpdate':
@@ -388,6 +431,7 @@ export const App: React.FC = () => {
             feedItems: [],
           });
           setFillReview(null);
+          setCollectCacheHit(false);
           break;
         case 'collectLogAppend':
           setCollectLoading((prev) => ({
@@ -402,7 +446,12 @@ export const App: React.FC = () => {
             notify(msg.error || '已取消采集');
           } else if (msg.preview) {
             setFillReview(msg.preview);
-            notify('✅ 已生成确认清单');
+            setCollectCacheHit(!!msg.fromCache);
+            notify(
+              msg.fromCache
+                ? '✅ 已生成确认清单（来自缓存）'
+                : '✅ 已生成确认清单',
+            );
           } else if (msg.error) {
             notify(`❌ ${msg.error}`);
           }
@@ -415,14 +464,21 @@ export const App: React.FC = () => {
         case 'fillApplied':
           notify(msg.message || '✅ 已写入');
           setFillReview(null);
-          loadDate(log.date);
+          if (msg.reloadDate) {
+            loadDateRef.current(String(msg.reloadDate));
+          }
+          break;
+        case 'notify':
+          if (msg.message) {
+            notify(String(msg.message));
+          }
           break;
       }
     };
     window.addEventListener('message', handler);
-    vscode.postMessage({ command: 'ready' });
+    vscode.postMessage({ command: 'ready', activeDate: initialDate });
     return () => window.removeEventListener('message', handler);
-  }, [notify]);
+  }, [notify, initialDate]);
 
   // 更新日志
   const updateLog = useCallback((fn: (prev: DailyLog) => DailyLog) => {
@@ -533,10 +589,27 @@ export const App: React.FC = () => {
   );
 
   const handleCollectViewChange = (next: CollectView) => {
-    setCollectView(next);
-    if (next === 'custom') {
-      setCollectRangeStart(log.date);
-      setCollectRangeEnd(log.date);
+    if (fillReview && !window.confirm('切换采集范围将丢弃当前确认页，是否继续？')) {
+      return;
+    }
+    const nextState = transitionCollectView(
+      collectViewStateFromParts(
+        collectView,
+        log.date,
+        collectRangeStart,
+        collectRangeEnd,
+      ),
+      next,
+    );
+    setCollectView(nextState.view);
+    setCollectRangeStart(nextState.customStart);
+    setCollectRangeEnd(nextState.customEnd);
+    if (nextState.logDate !== log.date) {
+      loadDate(nextState.logDate);
+    }
+    if (fillReview) {
+      setFillReview(null);
+      vscode.postMessage({ command: 'discardFillPreview' });
     }
   };
 
@@ -550,7 +623,23 @@ export const App: React.FC = () => {
     }
   }, [collectView, log.date, collectRangeStart, collectRangeEnd, fillReview]);
 
-  const collectGit = () => {
+  const collectAndPolish = () => {
+    if (pluginSecrets && !pluginSecrets.apiKey.configured) {
+      notify('请先在系统设置中配置 API Key');
+      vscode.postMessage({ command: 'openPanelSettings' });
+      return;
+    }
+    const request = buildCollectRequest();
+    vscode.postMessage({
+      command: 'collectAndPolish',
+      scope: request.scope,
+      anchorDate: request.anchorDate,
+      rangeStart: request.rangeStart,
+      rangeEnd: request.rangeEnd,
+    });
+  };
+
+  const collectGit = (forceRescan = false) => {
     const request = buildCollectRequest();
     vscode.postMessage({
       command: 'collectGitFill',
@@ -558,8 +647,11 @@ export const App: React.FC = () => {
       anchorDate: request.anchorDate,
       rangeStart: request.rangeStart,
       rangeEnd: request.rangeEnd,
+      forceRescan,
     });
   };
+
+  const collectRescan = () => collectGit(true);
 
   const polishAi = (reuseInMemoryPreview = false) => {
     if (pluginSecrets && !pluginSecrets.apiKey.configured) {
@@ -594,6 +686,8 @@ export const App: React.FC = () => {
     vscode.postMessage({ command: 'loadMonthLogs', year: summaryYear, month: summaryMonth });
     vscode.postMessage({ command: 'updateSummaryPreview', year: summaryYear, month: summaryMonth });
   }, [summaryYear, summaryMonth]);
+
+  loadMonthRef.current = loadMonth;
 
   useEffect(() => {
     if (tab === 'summary') { loadMonth(); }
@@ -887,8 +981,26 @@ export const App: React.FC = () => {
             )}
           </div>
           <div className="today-toolbar-collect-right">
-            <button type="button" className="btn secondary" onClick={collectGit}>
+            {collectCacheHit && (
+              <span className="collect-cache-badge" title="上次采集命中缓存">
+                缓存
+              </span>
+            )}
+            <button type="button" className="btn secondary" onClick={() => collectGit()}>
               Git 采集
+            </button>
+            {collectCacheHit && (
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={collectRescan}
+                title="忽略缓存，重新扫描 Git"
+              >
+                重新扫描
+              </button>
+            )}
+            <button type="button" className="btn" onClick={collectAndPolish}>
+              采集并润色
             </button>
             <button
               type="button"
@@ -990,7 +1102,22 @@ export const App: React.FC = () => {
 
       {importPreview && (
         <div style={{ ...S.section, marginBottom: '8px' }}>
-          <div style={S.sectionTitle}>📥 导入预览 ({importPreview.source})</div>
+          <div style={{ ...S.sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📥 导入预览 ({importPreview.source})</span>
+            <button
+              type="button"
+              style={S.btnSm}
+              onClick={() => {
+                const all: Record<string, boolean> = {};
+                for (const item of importPreview.items) {
+                  all[item.date] = true;
+                }
+                setImportSelection(all);
+              }}
+            >
+              全选
+            </button>
+          </div>
           <div style={{ maxHeight: '120px', overflowY: 'auto', fontSize: '10px' }}>
             {importPreview.items.map(item => (
               <label key={item.date} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', marginBottom: '4px' }}>

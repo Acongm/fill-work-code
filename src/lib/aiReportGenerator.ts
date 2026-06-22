@@ -1,8 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as vscode from 'vscode';
-import { AiClient } from './aiClient';
 import { WorkLogManager, DailyLog } from './workLogManager';
+import type { PluginSettings } from '../features/settings/pluginSettings';
+import {
+  OpenAiCompatibleClient,
+  type OpenAiCompatibleConfig,
+} from '../services/openAiCompatibleClient';
 
 interface AiDailyResult {
   date: string;
@@ -41,19 +44,52 @@ interface AiOutput {
 }
 
 export class AiReportGenerator {
-  private ai: AiClient;
+  private readonly client = new OpenAiCompatibleClient();
   private workLogManager: WorkLogManager;
+  private aiRuntime: { config: OpenAiCompatibleConfig } | null = null;
 
   constructor(workLogManager: WorkLogManager) {
-    this.ai = new AiClient();
     this.workLogManager = workLogManager;
   }
 
-  public async generateAll(year: number, month: number): Promise<{ jsonPath: string; mdPath: string }> {
-    const configError = this.ai.validateConfig();
-    if (configError) {
-      throw new Error(configError);
+  public configureAi(settings: PluginSettings, apiKey: string): void {
+    if (!apiKey.trim()) {
+      throw new Error('请先在设置中配置 AI API Key');
     }
+    this.aiRuntime = {
+      config: {
+        baseUrl: settings.aiBaseUrl,
+        apiKey: apiKey.trim(),
+        model: settings.aiModel,
+        timeoutMs: settings.aiTimeoutMs,
+      },
+    };
+  }
+
+  private async chat(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    maxTokens: number,
+  ): Promise<string> {
+    if (!this.aiRuntime) {
+      throw new Error('AI 未配置');
+    }
+    const result = await this.client.chat(this.aiRuntime.config, messages, {
+      maxTokens,
+      temperature: 0.2,
+      responseFormatJson: true,
+      stream: false,
+      thinking: 'disabled',
+    });
+    return result.content;
+  }
+
+  public async generateAll(
+    year: number,
+    month: number,
+    settings: PluginSettings,
+    apiKey: string,
+  ): Promise<{ jsonPath: string; mdPath: string }> {
+    this.configureAi(settings, apiKey);
 
     const monthlyLogs = this.workLogManager.getMonthlyLogs(year, month);
     const dailyLogs = this.sanitizeLogs(monthlyLogs.logs || []);
@@ -108,13 +144,12 @@ export class AiReportGenerator {
   private async generateDaily(log: DailyLog): Promise<AiDailyResult> {
     const prompt = this.buildDailyPrompt(log);
     const taskName = `日报润色 [${log.date}]`;
-    const content = await this.ai.chat(
+    const content = await this.chat(
       [
         { role: 'system', content: '你是专业中文写作助手。只输出 JSON，不要输出推理。' },
-        { role: 'user', content: prompt }
+        { role: 'user', content: prompt },
       ],
-      this.ai.getMaxTokensDaily(),
-      taskName
+      4096,
     );
 
     const parsed = this.safeParseJson(content, { advice: [], polished: { completed: [], plan: [], blockers: [], notes: '' } });
@@ -142,16 +177,15 @@ export class AiReportGenerator {
     const taskName = `批量日报润色 [${logs[0].date} ~ ${logs[logs.length - 1].date}] (${logs.length}天)`;
     const prompt = this.buildDailyBatchPrompt(logs);
     
-    const content = await this.ai.chat(
+    const content = await this.chat(
       [
-        { 
-          role: 'system', 
-          content: '你是专业中文写作助手。严格按照 JSON 格式输出，不要输出任何额外内容。' 
+        {
+          role: 'system',
+          content: '你是专业中文写作助手。严格按照 JSON 格式输出，不要输出任何额外内容。',
         },
-        { role: 'user', content: prompt }
+        { role: 'user', content: prompt },
       ],
-      Math.min(this.ai.getMaxTokensDaily() * 2, 4096), // 批量处理时增加 tokens
-      taskName
+      4096,
     );
 
     const parsed = this.safeParseJson(content, {});
@@ -193,13 +227,12 @@ export class AiReportGenerator {
   private async generateWeekly(weekIndex: number, logs: DailyLog[]): Promise<AiWeeklyResult> {
     const prompt = this.buildWeeklyPrompt(logs);
     const taskName = `周报总结 [Week ${weekIndex}]`;
-    const content = await this.ai.chat(
+    const content = await this.chat(
       [
         { role: 'system', content: '你是专业周报总结助手，输出结构化周报。' },
-        { role: 'user', content: prompt }
+        { role: 'user', content: prompt },
       ],
-      this.ai.getMaxTokensWeekly(),
-      taskName
+      4096,
     );
 
     const parsed = this.safeParseJson(content, { summary: '', highlights: [], risks: [], nextPlan: [] });
@@ -218,13 +251,12 @@ export class AiReportGenerator {
   private async generateMonthly(year: number, month: number, logs: DailyLog[]): Promise<AiMonthlyResult> {
     const prompt = this.buildMonthlyPrompt(year, month, logs);
     const taskName = `月报总结 [${year}-${String(month).padStart(2, '0')}]`;
-    const content = await this.ai.chat(
+    const content = await this.chat(
       [
         { role: 'system', content: '你是专业月报总结助手，输出结构化月报。' },
-        { role: 'user', content: prompt }
+        { role: 'user', content: prompt },
       ],
-      this.ai.getMaxTokensMonthly(),
-      taskName
+      4096,
     );
 
     const parsed = this.safeParseJson(content, { summary: '', highlights: [], risks: [], improvements: [] });
@@ -239,13 +271,12 @@ export class AiReportGenerator {
   private async generateMonthlyFromWeekly(year: number, month: number, weekly: AiWeeklyResult[]): Promise<AiMonthlyResult> {
     const prompt = this.buildMonthlyPromptFromWeekly(year, month, weekly);
     const taskName = `月报汇总 [基于周报]`;
-    const content = await this.ai.chat(
+    const content = await this.chat(
       [
         { role: 'system', content: '你是专业月报总结助手，输出结构化月报。' },
-        { role: 'user', content: prompt }
+        { role: 'user', content: prompt },
       ],
-      this.ai.getMaxTokensMonthly(),
-      taskName
+      4096,
     );
 
     const parsed = this.safeParseJson(content, { summary: '', highlights: [], risks: [], improvements: [] });
@@ -375,14 +406,7 @@ export class AiReportGenerator {
   }
 
   private resolveStoragePath(): string {
-    const config = vscode.workspace.getConfiguration('dailyWorkLog');
-    let storagePath = config.get<string>('storagePath') || '~/.work-logs';
-    if (storagePath.startsWith('~/')) {
-      storagePath = path.join(require('os').homedir(), storagePath.slice(2));
-    } else if (storagePath === '~') {
-      storagePath = require('os').homedir();
-    }
-    return storagePath;
+    return this.workLogManager.getStorageDir();
   }
 
   private groupLogsByWorkWeek(logs: DailyLog[]): DailyLog[][] {

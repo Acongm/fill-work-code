@@ -4,7 +4,7 @@
     {
       "label": "compile",
       "type": "shell",
-      "command": "npm run compile",
+      "command": "bash -lc 'export NVM_DIR=\"${NVM_DIR:-$HOME/.nvm}\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && nvm use 2>/dev/null || true; npm run compile'",
       "options": {
         "cwd": "${workspaceFolder}"
       },

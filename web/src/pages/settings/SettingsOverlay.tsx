@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { OverlayHeader } from '../../components/ui/OverlayHeader';
 import { SecretField, type SecretMeta } from '../../components/ui/SecretField';
+import { SettingsFieldGroup } from '../../components/settings/SettingField';
 
 export interface PluginSettingsForm {
   displayName: string;
@@ -25,6 +26,14 @@ export interface PluginSettingsForm {
   visibleFields: string[];
   dailySyncFieldVisibility: boolean;
   gitCollectCacheEnabled: boolean;
+  autoPolishAfterCollect?: boolean;
+  weekendRollforward?: boolean;
+  openRepoInNewWindow?: boolean;
+  timesheet?: {
+    company: string;
+    approver: string;
+    defaultHours: number;
+  };
   email: {
     smtpHost: string;
     smtpPort: number;
@@ -89,52 +98,11 @@ export const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
       )}
       <section className="settings-section">
         <h3>Git 采集</h3>
-        <div className="setting-row">
-          <label>搜索根目录（逗号分隔）</label>
-          <textarea
-            rows={2}
-            value={settings.searchRoots}
-            onChange={(e) => onChange({ ...settings, searchRoots: e.target.value })}
-          />
-        </div>
-        <div className="setting-row setting-row-stack">
-          <label>Git 远程地址过滤（逗号分隔，留空=不过滤）</label>
-          <input
-            value={settings.originFilters}
-            onChange={(e) =>
-              onChange({ ...settings, originFilters: e.target.value })
-            }
-            placeholder="scm.starbucks.com 或 git@scm.starbucks.com:china/"
-          />
-          <p className="setting-hint">
-            主机名精确匹配 host；含 <code>@</code>、<code>/</code>、<code>:</code> 的条目按
-            remote URL 子串匹配。示例：scm.starbucks.com、:cpeng/、git@scm.starbucks.com:china/
-          </p>
-        </div>
-        <div className="setting-row">
-          <label>作者别名（逗号分隔；留空=本机 git user.name/email）</label>
-          <input
-            value={settings.authorAliases}
-            onChange={(e) =>
-              onChange({ ...settings, authorAliases: e.target.value })
-            }
-          />
-        </div>
-        <div className="setting-row">
-          <label>
-            <input
-              type="checkbox"
-              checked={settings.gitCollectCacheEnabled}
-              onChange={(e) =>
-                onChange({
-                  ...settings,
-                  gitCollectCacheEnabled: e.target.checked,
-                })
-              }
-            />{' '}
-            历史日期 Git 采集使用缓存（跳过重复扫描）
-          </label>
-        </div>
+        <SettingsFieldGroup section="git" settings={settings} onChange={onChange} />
+        <p className="setting-hint">
+          Origin 过滤：主机名精确匹配 host；含 <code>@</code>、<code>/</code>、<code>:</code> 的条目按
+          remote URL 子串匹配。
+        </p>
       </section>
       <section className="settings-section">
         <h3>AI（OpenAI 兼容）</h3>

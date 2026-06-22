@@ -39,7 +39,9 @@ export class TimesheetRunner {
       options.outputDir.trim() || path.join(options.workLogDir, monthKey);
     fs.mkdirSync(outputDir, { recursive: true });
 
-    const displayName = options.settings.displayName.trim() || '彭聪';
+    const displayName = options.settings.displayName.trim() || 'User';
+    const company = options.settings.timesheet?.company?.trim() || '';
+    const approver = options.settings.timesheet?.approver?.trim() || '';
     const yyyymm = `${options.year}${String(options.month).padStart(2, '0')}`;
     const timesheetPath = path.join(
       outputDir,
@@ -65,9 +67,9 @@ export class TimesheetRunner {
       '--psp-name',
       displayName,
       '--psp-company',
-      '英特利普（上海）信息技术有限公司',
+      company,
       '--approver',
-      'Liangyu Chen',
+      approver,
       '--artifacts-source-template',
       path.join(
         options.workLogDir,
