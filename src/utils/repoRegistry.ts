@@ -248,6 +248,7 @@ export function aggregateRepoActivity(
     group.clones.filter((c) => cloneIds.has(c.id)).map((c) => c.repoRoot),
   );
   const originSet = new Set([group.originUrl]);
+  const repoCommitDates = new Set<string>();
   const commits: RepoActivityCommit[] = [];
   const gitlogLines: Array<{ date: string; line: string }> = [];
   const ailogLines: Array<{ date: string; line: string }> = [];
@@ -274,8 +275,10 @@ export function aggregateRepoActivity(
           if (options?.cloneId && !cloneRoots.has(row.repoRoot)) {
             continue;
           }
+          const commitDate = row.commitDay.slice(0, 10);
+          repoCommitDates.add(commitDate);
           commits.push({
-            date: row.commitDay,
+            date: commitDate,
             sha: row.sha,
             subject: row.subject,
             repoRoot: row.repoRoot,
@@ -297,15 +300,17 @@ export function aggregateRepoActivity(
         };
         const origins = log.origin_url || [];
         const matchOrigin = origins.some((o) => originSet.has(o));
-        if (!matchOrigin && commits.every((c) => c.date !== date)) {
+        const hasRepoCommitOnDate = repoCommitDates.has(date);
+        const relatedToRepo = matchOrigin || hasRepoCommitOnDate;
+        if (!relatedToRepo) {
           continue;
         }
         for (const line of log.gitlog || []) {
-          if (line.includes(`[${group.repoName}]`) || matchOrigin) {
+          if (line.includes(`[${group.repoName}]`) || relatedToRepo) {
             gitlogLines.push({ date, line });
           }
         }
-        if (matchOrigin && (log.ailog || []).length > 0) {
+        if ((log.ailog || []).length > 0) {
           for (const line of log.ailog || []) {
             ailogLines.push({ date, line });
           }
