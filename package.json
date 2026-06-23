@@ -2,13 +2,25 @@
   "name": "daily-work-log",
   "displayName": "Daily Work Log",
   "description": "Daily work log management with date-based organization, form collection, and AI summary generation",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "packageManager": "yarn@3.8.1",
   "publisher": "acongm",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Acongm/fill-work-code.git"
   },
+  "homepage": "https://github.com/Acongm/fill-work-code#readme",
+  "bugs": {
+    "url": "https://github.com/Acongm/fill-work-code/issues"
+  },
+  "keywords": [
+    "work log",
+    "daily report",
+    "git",
+    "timesheet",
+    "ai"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -16,83 +28,112 @@
     "Other"
   ],
   "activationEvents": [
+    "onView:daily-work-log.chatView",
     "onCommand:daily-work-log.openForm",
-    "onCommand:daily-work-log.showSummary",
-    "onCommand:daily-work-log.generateAI",
-    "onCommand:daily-work-log.sendEmail",
-    "onCommand:daily-work-log.editConfig",
+    "onCommand:daily-work-log.viewMonth",
+    "onCommand:daily-work-log.openStorage",
+    "onCommand:daily-work-log.quickOpen",
+    "onCommand:daily-work-log.aiGenerateAll",
+    "onCommand:daily-work-log.openPanelSettings",
+    "onCommand:daily-work-log.refresh",
     "onCommand:daily-work-log.openProfile",
-    "onCommand:daily-work-log.package",
-    "onCommand:daily-work-log.packageForce",
-    "onCommand:daily-work-log.packageStatus",
-    "onCommand:daily-work-log.releasePatch",
-    "onCommand:daily-work-log.releaseMinor",
-    "onCommand:daily-work-log.releaseMajor"
+    "onCommand:daily-work-log.openOutput"
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "daily-work-log",
+          "title": "📋 工作日志",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "daily-work-log": [
+        {
+          "type": "webview",
+          "id": "daily-work-log.chatView",
+          "name": "📋 工作日志"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "daily-work-log.openForm",
-        "title": "Open Daily Work Log",
-        "category": "Daily Work Log"
+        "title": "打开每日工作日报",
+        "category": "Work Log"
       },
       {
-        "command": "daily-work-log.showSummary",
-        "title": "Show Monthly Summary",
-        "category": "Daily Work Log"
+        "command": "daily-work-log.viewMonth",
+        "title": "查看当月工作汇总",
+        "category": "Work Log"
       },
       {
-        "command": "daily-work-log.generateAI",
-        "title": "Generate AI Report",
-        "category": "Daily Work Log"
+        "command": "daily-work-log.openStorage",
+        "title": "打开日志存储位置",
+        "category": "Work Log"
       },
       {
-        "command": "daily-work-log.sendEmail",
-        "title": "Send Work Report Email",
-        "category": "Daily Work Log"
+        "command": "daily-work-log.quickOpen",
+        "title": "快速打开",
+        "category": "Work Log"
       },
       {
-        "command": "daily-work-log.editConfig",
-        "title": "Edit Configuration",
-        "category": "Daily Work Log"
+        "command": "daily-work-log.aiGenerateAll",
+        "title": "AI 润色与总结",
+        "category": "Work Log"
+      },
+      {
+        "command": "daily-work-log.openPanelSettings",
+        "title": "系统设置",
+        "category": "Work Log",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "daily-work-log.refresh",
+        "title": "刷新",
+        "category": "Work Log",
+        "icon": "$(refresh)"
       },
       {
         "command": "daily-work-log.openProfile",
-        "title": "Open Personal Center",
-        "category": "Daily Work Log"
+        "title": "个人中心",
+        "category": "Work Log",
+        "icon": "$(account)"
       },
       {
-        "command": "daily-work-log.package",
-        "title": "Package VSIX",
-        "category": "Daily Work Log"
-      },
-      {
-        "command": "daily-work-log.packageForce",
-        "title": "Package VSIX (Force Overwrite)",
-        "category": "Daily Work Log"
-      },
-      {
-        "command": "daily-work-log.packageStatus",
-        "title": "Show Package Status",
-        "category": "Daily Work Log"
-      },
-      {
-        "command": "daily-work-log.releasePatch",
-        "title": "Release Patch Version",
-        "category": "Daily Work Log"
-      },
-      {
-        "command": "daily-work-log.releaseMinor",
-        "title": "Release Minor Version",
-        "category": "Daily Work Log"
-      },
-      {
-        "command": "daily-work-log.releaseMajor",
-        "title": "Release Major Version",
-        "category": "Daily Work Log"
+        "command": "daily-work-log.openOutput",
+        "title": "打开日志",
+        "category": "Work Log",
+        "icon": "$(output)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "daily-work-log.refresh",
+          "when": "view == daily-work-log.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "daily-work-log.openProfile",
+          "when": "view == daily-work-log.chatView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "daily-work-log.openPanelSettings",
+          "when": "view == daily-work-log.chatView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "daily-work-log.openOutput",
+          "when": "view == daily-work-log.chatView",
+          "group": "navigation@4"
+        }
+      ]
+    },
     "configuration": {
       "title": "Daily Work Log",
       "properties": {
@@ -156,7 +197,7 @@
           "default": false,
           "description": "Sync daily form field visibility with panel settings"
         },
-        "dailyWorkLog.previewEnabled": {
+        "dailyWorkLog.preview.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Open a side preview panel for daily and monthly reports"
