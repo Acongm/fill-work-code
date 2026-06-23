@@ -5,6 +5,10 @@
   "version": "0.1.12",
   "packageManager": "yarn@3.8.1",
   "publisher": "acongm",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Acongm/fill-work-code.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
