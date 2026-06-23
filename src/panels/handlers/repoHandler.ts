@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { HostPanelDeps } from './types';
 import { loadPluginSettings } from './settingsHandler';
+import { expandHome } from './panelUtils';
 import {
   aggregateRepoActivity,
   getRepoById,
@@ -11,12 +12,18 @@ import {
   updateRepoFlags,
 } from '../../utils/repoRegistry';
 
+async function resolveRepoRegistryRoot(deps: HostPanelDeps): Promise<string> {
+  const settings = await loadPluginSettings(deps);
+  const outputDir = settings.outputDir.trim();
+  return outputDir ? expandHome(outputDir) : deps.workLogManager.getStorageDir();
+}
+
 export async function handleListRepos(
   deps: HostPanelDeps,
   search?: string,
 ): Promise<void> {
-  const storagePath = deps.workLogManager.getStorageDir();
-  const registry = loadRegistry(storagePath);
+  const registryRoot = await resolveRepoRegistryRoot(deps);
+  const registry = loadRegistry(registryRoot);
   const groups = listRepoGroups(registry, { search });
   deps.postToWebview({ command: 'reposListed', groups });
 }
@@ -27,14 +34,14 @@ export async function handleGetRepoDetail(
   cloneId?: string,
   month?: string,
 ): Promise<void> {
-  const storagePath = deps.workLogManager.getStorageDir();
-  const registry = loadRegistry(storagePath);
+  const registryRoot = await resolveRepoRegistryRoot(deps);
+  const registry = loadRegistry(registryRoot);
   const group = getRepoGroupByOrigin(registry, originUrl);
   if (!group) {
     deps.postToWebview({ command: 'repoDetail', error: '仓库不存在' });
     return;
   }
-  const activity = aggregateRepoActivity(storagePath, group, { cloneId, month });
+  const activity = aggregateRepoActivity(registryRoot, group, { cloneId, month });
   deps.postToWebview({ command: 'repoDetail', group, activity, cloneId });
 }
 
@@ -42,8 +49,8 @@ export async function handleOpenRepo(
   deps: HostPanelDeps,
   repoId: string,
 ): Promise<void> {
-  const storagePath = deps.workLogManager.getStorageDir();
-  const registry = loadRegistry(storagePath);
+  const registryRoot = await resolveRepoRegistryRoot(deps);
+  const registry = loadRegistry(registryRoot);
   const repo = getRepoById(registry, repoId);
   if (!repo) {
     vscode.window.showWarningMessage('仓库路径未找到');
@@ -70,9 +77,9 @@ export async function handleUpdateRepo(
   repoId: string,
   flags: { pinned?: boolean; hidden?: boolean },
 ): Promise<void> {
-  const storagePath = deps.workLogManager.getStorageDir();
-  let registry = loadRegistry(storagePath);
+  const registryRoot = await resolveRepoRegistryRoot(deps);
+  let registry = loadRegistry(registryRoot);
   registry = updateRepoFlags(registry, repoId, flags);
-  saveRegistry(storagePath, registry);
+  saveRegistry(registryRoot, registry);
   await handleListRepos(deps);
 }
