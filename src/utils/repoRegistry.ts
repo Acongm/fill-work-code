@@ -234,10 +234,41 @@ export interface RepoActivity {
   ailogLines: Array<{ date: string; line: string }>;
 }
 
+function uniquePaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const p of paths) {
+    if (!p) {
+      continue;
+    }
+    const key = path.resolve(p);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(p);
+  }
+  return result;
+}
+
+function listMonthDirs(root: string, month?: string): string[] {
+  if (!root || !fs.existsSync(root)) {
+    return [];
+  }
+  if (month) {
+    const monthDir = path.join(root, month);
+    return fs.existsSync(monthDir) ? [monthDir] : [];
+  }
+  return fs
+    .readdirSync(root)
+    .filter((d) => /^\d{4}-\d{2}$/.test(d))
+    .map((d) => path.join(root, d));
+}
+
 export function aggregateRepoActivity(
   storagePath: string,
   group: RepoGroup,
-  options?: { cloneId?: string; month?: string },
+  options?: { cloneId?: string; month?: string; logStoragePaths?: string[] },
 ): RepoActivity {
   const cloneIds = new Set(
     options?.cloneId
@@ -254,40 +285,47 @@ export function aggregateRepoActivity(
   const ailogLines: Array<{ date: string; line: string }> = [];
 
   const month = options?.month;
-  const monthDirs = month
-    ? [path.join(storagePath, month)]
-    : fs.existsSync(storagePath)
-      ? fs
-          .readdirSync(storagePath)
-          .filter((d) => /^\d{4}-\d{2}$/.test(d))
-          .map((d) => path.join(storagePath, d))
-      : [];
+  const commitMonthDirs = listMonthDirs(storagePath, month);
 
-  for (const monthDir of monthDirs) {
+  for (const monthDir of commitMonthDirs) {
     const tsvPath = path.join(monthDir, '_commits.tsv');
-    if (fs.existsSync(tsvPath)) {
-      const rows = parseCommitsTsv(fs.readFileSync(tsvPath, 'utf-8'));
-      for (const row of rows) {
-        if (
-          cloneRoots.has(row.repoRoot) ||
-          (row.originUrl && originSet.has(row.originUrl))
-        ) {
-          if (options?.cloneId && !cloneRoots.has(row.repoRoot)) {
-            continue;
-          }
-          const commitDate = row.commitDay.slice(0, 10);
-          repoCommitDates.add(commitDate);
-          commits.push({
-            date: commitDate,
-            sha: row.sha,
-            subject: row.subject,
-            repoRoot: row.repoRoot,
-            repoName: row.repoName,
-          });
+    if (!fs.existsSync(tsvPath)) {
+      continue;
+    }
+    const rows = parseCommitsTsv(fs.readFileSync(tsvPath, 'utf-8'));
+    for (const row of rows) {
+      if (
+        cloneRoots.has(row.repoRoot) ||
+        (row.originUrl && originSet.has(row.originUrl))
+      ) {
+        if (options?.cloneId && !cloneRoots.has(row.repoRoot)) {
+          continue;
         }
+        const commitDate = row.commitDay.slice(0, 10);
+        repoCommitDates.add(commitDate);
+        commits.push({
+          date: commitDate,
+          sha: row.sha,
+          subject: row.subject,
+          repoRoot: row.repoRoot,
+          repoName: row.repoName,
+        });
       }
     }
-    const files = fs.readdirSync(monthDir).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f));
+  }
+
+  const logRoots = uniquePaths([
+    storagePath,
+    ...(options?.logStoragePaths || []),
+  ]);
+  const logMonthDirs = uniquePaths(
+    logRoots.flatMap((root) => listMonthDirs(root, month)),
+  );
+
+  for (const monthDir of logMonthDirs) {
+    const files = fs
+      .readdirSync(monthDir)
+      .filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f));
     for (const file of files) {
       const date = file.replace('.json', '');
       try {
@@ -331,6 +369,18 @@ export function aggregateRepoActivity(
     return true;
   });
 
+  const uniqueDatedLines = <T extends { date: string; line: string }>(items: T[]): T[] => {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      const key = `${item.date}\n${item.line}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  };
+
   const sortByDateDesc = <T extends { date: string }>(items: T[]): T[] =>
     [...items].sort((a, b) => {
       const byDate = b.date.localeCompare(a.date);
@@ -348,7 +398,7 @@ export function aggregateRepoActivity(
       }
       return b.sha.localeCompare(a.sha);
     }),
-    gitlogLines: sortByDateDesc(gitlogLines),
-    ailogLines: sortByDateDesc(ailogLines),
+    gitlogLines: sortByDateDesc(uniqueDatedLines(gitlogLines)),
+    ailogLines: sortByDateDesc(uniqueDatedLines(ailogLines)),
   };
 }
