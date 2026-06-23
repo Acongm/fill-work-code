@@ -2,7 +2,7 @@
   "name": "daily-work-log",
   "displayName": "Daily Work Log",
   "description": "Daily work log management with date-based organization, form collection, and AI summary generation",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "packageManager": "yarn@3.8.1",
   "publisher": "acongm",
   "engines": {
@@ -185,7 +185,6 @@
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
-    "@types/vscode": "^1.103.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
