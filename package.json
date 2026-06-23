@@ -6,143 +6,156 @@
   "packageManager": "yarn@3.8.1",
   "publisher": "acongm",
   "engines": {
-    "vscode": "^1.103.0",
-    "node": ">=18"
+    "vscode": "^1.85.0"
   },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Acongm/fill-work-code"
-  },
-  "homepage": "https://github.com/Acongm/fill-work-code#readme",
-  "bugs": {
-    "url": "https://github.com/Acongm/fill-work-code/issues"
-  },
-  "keywords": [
-    "work log",
-    "daily report",
-    "git",
-    "timesheet",
-    "ai"
-  ],
   "categories": [
     "Other"
   ],
   "activationEvents": [
-    "onView:daily-work-log.chatView"
+    "onCommand:daily-work-log.openForm",
+    "onCommand:daily-work-log.showSummary",
+    "onCommand:daily-work-log.generateAI",
+    "onCommand:daily-work-log.sendEmail",
+    "onCommand:daily-work-log.editConfig",
+    "onCommand:daily-work-log.openProfile",
+    "onCommand:daily-work-log.package",
+    "onCommand:daily-work-log.packageForce",
+    "onCommand:daily-work-log.packageStatus",
+    "onCommand:daily-work-log.releasePatch",
+    "onCommand:daily-work-log.releaseMinor",
+    "onCommand:daily-work-log.releaseMajor"
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "daily-work-log",
-          "title": "📋 工作日志",
-          "icon": "resources/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "daily-work-log": [
-        {
-          "type": "webview",
-          "id": "daily-work-log.chatView",
-          "name": "📋 工作日志"
-        }
-      ]
-    },
     "commands": [
       {
         "command": "daily-work-log.openForm",
-        "title": "打开每日工作日报",
-        "category": "Work Log"
+        "title": "Open Daily Work Log",
+        "category": "Daily Work Log"
       },
       {
-        "command": "daily-work-log.viewMonth",
-        "title": "查看当月工作汇总",
-        "category": "Work Log"
+        "command": "daily-work-log.showSummary",
+        "title": "Show Monthly Summary",
+        "category": "Daily Work Log"
       },
       {
-        "command": "daily-work-log.openStorage",
-        "title": "打开日志存储位置",
-        "category": "Work Log"
+        "command": "daily-work-log.generateAI",
+        "title": "Generate AI Report",
+        "category": "Daily Work Log"
       },
       {
-        "command": "daily-work-log.quickOpen",
-        "title": "快速打开",
-        "category": "Work Log"
+        "command": "daily-work-log.sendEmail",
+        "title": "Send Work Report Email",
+        "category": "Daily Work Log"
       },
       {
-        "command": "daily-work-log.aiGenerateAll",
-        "title": "AI 润色与总结",
-        "category": "Work Log"
-      },
-      {
-        "command": "daily-work-log.openPanelSettings",
-        "title": "系统设置",
-        "category": "Work Log",
-        "icon": "$(settings-gear)"
-      },
-      {
-        "command": "daily-work-log.refresh",
-        "title": "刷新",
-        "category": "Work Log",
-        "icon": "$(refresh)"
+        "command": "daily-work-log.editConfig",
+        "title": "Edit Configuration",
+        "category": "Daily Work Log"
       },
       {
         "command": "daily-work-log.openProfile",
-        "title": "个人中心",
-        "category": "Work Log",
-        "icon": "$(account)"
+        "title": "Open Personal Center",
+        "category": "Daily Work Log"
       },
       {
-        "command": "daily-work-log.openOutput",
-        "title": "打开日志",
-        "category": "Work Log",
-        "icon": "$(output)"
+        "command": "daily-work-log.package",
+        "title": "Package VSIX",
+        "category": "Daily Work Log"
+      },
+      {
+        "command": "daily-work-log.packageForce",
+        "title": "Package VSIX (Force Overwrite)",
+        "category": "Daily Work Log"
+      },
+      {
+        "command": "daily-work-log.packageStatus",
+        "title": "Show Package Status",
+        "category": "Daily Work Log"
+      },
+      {
+        "command": "daily-work-log.releasePatch",
+        "title": "Release Patch Version",
+        "category": "Daily Work Log"
+      },
+      {
+        "command": "daily-work-log.releaseMinor",
+        "title": "Release Minor Version",
+        "category": "Daily Work Log"
+      },
+      {
+        "command": "daily-work-log.releaseMajor",
+        "title": "Release Major Version",
+        "category": "Daily Work Log"
       }
     ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "daily-work-log.refresh",
-          "when": "view == daily-work-log.chatView",
-          "group": "navigation@1"
-        },
-        {
-          "command": "daily-work-log.openProfile",
-          "when": "view == daily-work-log.chatView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "daily-work-log.openPanelSettings",
-          "when": "view == daily-work-log.chatView",
-          "group": "navigation@3"
-        },
-        {
-          "command": "daily-work-log.openOutput",
-          "when": "view == daily-work-log.chatView",
-          "group": "navigation@4"
-        }
-      ]
-    },
     "configuration": {
       "title": "Daily Work Log",
       "properties": {
         "dailyWorkLog.storagePath": {
           "type": "string",
           "default": "~/.work-logs",
-          "description": "工作日志存储位置"
+          "description": "Path to store work log files"
         },
         "dailyWorkLog.autoSave": {
           "type": "boolean",
           "default": true,
-          "description": "编辑后自动保存日报"
+          "description": "Automatically save changes"
         },
-        "dailyWorkLog.preview.enabled": {
+        "dailyWorkLog.aiEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable AI report generation"
+        },
+        "dailyWorkLog.showCompletedInput": {
           "type": "boolean",
           "default": true,
-          "description": "是否启用日报/月报 Markdown 预览"
+          "description": "Show Completed input field"
+        },
+        "dailyWorkLog.showPlanInput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Plan input field"
+        },
+        "dailyWorkLog.showBlockersInput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Blockers input field"
+        },
+        "dailyWorkLog.showNotesInput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Notes input field"
+        },
+        "dailyWorkLog.showGitlogInput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show GitLog input field"
+        },
+        "dailyWorkLog.showAilogInput": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show AILog input field"
+        },
+        "dailyWorkLog.showGitCommitInput": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show GitCommit input field"
+        },
+        "dailyWorkLog.showOriginUrlInput": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show Origin URL input field"
+        },
+        "dailyWorkLog.dailySyncFieldVisibility": {
+          "type": "boolean",
+          "default": false,
+          "description": "Sync daily form field visibility with panel settings"
+        },
+        "dailyWorkLog.previewEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open a side preview panel for daily and monthly reports"
         }
       }
     },
@@ -185,6 +198,7 @@
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
+    "@types/vscode": "^1.103.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
