@@ -41,7 +41,11 @@ export async function handleGetRepoDetail(
     deps.postToWebview({ command: 'repoDetail', error: '仓库不存在' });
     return;
   }
-  const activity = aggregateRepoActivity(registryRoot, group, { cloneId, month });
+  const activity = aggregateRepoActivity(registryRoot, group, {
+    cloneId,
+    month,
+    logStoragePaths: [deps.workLogManager.getStorageDir()],
+  });
   deps.postToWebview({ command: 'repoDetail', group, activity, cloneId });
 }
 
