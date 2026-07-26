@@ -73,7 +73,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri,
     workLogManager: WorkLogManager,
     private readonly _context: vscode.ExtensionContext,
-    private readonly database: Database,
+    private readonly databaseReady: Promise<Database>,
   ) {
     this.workLogManager = workLogManager;
     this.aiReportGenerator = new AiReportGenerator(workLogManager);
@@ -128,12 +128,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     setTimeout(() => void this._updateWebview(), 100);
   }
 
-  private _buildDeps(): HostPanelDeps {
+  private async _buildDeps(): Promise<HostPanelDeps> {
     return {
       view: this._view,
       extensionUri: this._extensionUri,
       context: this._context,
-      database: this.database,
+      database: await this.databaseReady,
       workLogManager: this.workLogManager,
       gitEvidenceService: this.gitEvidenceService,
       aiPolishService: this.aiPolishService,
@@ -148,11 +148,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async _updateWebview(): Promise<void> {
-    await updateWebview(this._buildDeps());
+    try {
+      await updateWebview(await this._buildDeps());
+    } catch (error) {
+      this.postToWebview({
+        command: 'initializationError',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private async _handleMessage(data: any) {
-    const deps = this._buildDeps();
+    let deps: HostPanelDeps;
+    try {
+      deps = await this._buildDeps();
+    } catch (error) {
+      this.postToWebview({
+        command: 'initializationError',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
 
     switch (data.command) {
       case 'ready':

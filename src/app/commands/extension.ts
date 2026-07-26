@@ -14,6 +14,16 @@ import { QoderConversationCollector } from '../../collection/utils/qoderConversa
 
 let workLogManager: WorkLogManager;
 let database: Database | undefined;
+let databaseInitialization: Promise<Database> | undefined;
+
+export function startDatabaseBackedView<T>(
+  initializeDatabase: () => Promise<T>,
+  registerView: (databaseReady: Promise<T>) => void,
+): Promise<T> {
+  const databaseReady = Promise.resolve().then(initializeDatabase);
+  registerView(databaseReady);
+  return databaseReady;
+}
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log('Daily Work Log extension activated');
@@ -26,40 +36,49 @@ export async function activate(context: vscode.ExtensionContext) {
   workLogManager = new WorkLogManager(storageDir);
   console.log(`Work logs storage: ${storageDir}`);
 
-  try {
-    database = await openSqlJsDatabase(
-      resolveRuntimePaths(storageDir).database,
-    );
-    await migrateSchema(database);
-    const migration = await migrateLegacyData(database, storageDir);
-    if (migration.errors.length > 0) {
-      vscode.window.showWarningMessage(
-        `SQLite 已启用，但 ${migration.errors.length} 个旧数据文件迁移失败，请查看扩展日志。`,
+  let chatViewProvider!: ChatViewProvider;
+  databaseInitialization = startDatabaseBackedView(
+    async () => {
+      const openedDatabase = await openSqlJsDatabase(
+        resolveRuntimePaths(storageDir).database,
       );
-      for (const error of migration.errors) {
-        console.warn('Legacy migration failed:', error.path, error.message);
+      await migrateSchema(openedDatabase);
+      const migration = await migrateLegacyData(openedDatabase, storageDir);
+      if (migration.errors.length > 0) {
+        vscode.window.showWarningMessage(
+          `SQLite 已启用，但 ${migration.errors.length} 个旧数据文件迁移失败，请查看扩展日志。`,
+        );
+        for (const error of migration.errors) {
+          console.warn('Legacy migration failed:', error.path, error.message);
+        }
       }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    vscode.window.showErrorMessage(
-      `工作日志数据库初始化失败，已停止加载以保护数据: ${message}`,
-    );
-    throw error;
-  }
-
-  const chatViewProvider = new ChatViewProvider(
-    context.extensionUri,
-    workLogManager,
-    context,
-    database,
+      return openedDatabase;
+    },
+    databaseReady => {
+      chatViewProvider = new ChatViewProvider(
+        context.extensionUri,
+        workLogManager,
+        context,
+        databaseReady,
+      );
+      context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+          ChatViewProvider.viewType,
+          chatViewProvider,
+        ),
+      );
+    },
   );
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      ChatViewProvider.viewType,
-      chatViewProvider,
-    ),
-  );
+  databaseInitialization
+    .then(openedDatabase => {
+      database = openedDatabase;
+    })
+    .catch(error => {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(
+        `工作日志数据库初始化失败，已停止加载以保护数据: ${message}`,
+      );
+    });
 
   const post = (msg: Record<string, unknown>) => chatViewProvider.postToWebview(msg);
 
@@ -107,7 +126,9 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export async function deactivate() {
+  await databaseInitialization?.catch(() => undefined);
   await database?.close();
   database = undefined;
+  databaseInitialization = undefined;
   console.log('Daily Work Log extension deactivated');
 }

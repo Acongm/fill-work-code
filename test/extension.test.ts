@@ -10,6 +10,7 @@ import {
 	isRemovedWebviewCommand,
 	type RemovedWebviewCommand,
 } from '../src/shared/types/webviewMessages';
+import * as extensionEntry from '../src/app/commands/extension';
 import { resolveRuntimePaths } from '../src/settings/utils/pathUtils';
 import { aggregateRepoActivity } from '../src/shared/utils/repoRegistry';
 import type { RepoGroup } from '../src/shared/types/repoRegistry';
@@ -42,6 +43,37 @@ suite('Extension Test Suite', () => {
 		assert.strictEqual(paths.database, '/tmp/work-logs/work-log.sqlite');
 		assert.strictEqual(paths.runtime, '/tmp/work-logs/.runtime');
 		assert.strictEqual(paths.month(2026, 7), '/tmp/work-logs/2026-07');
+	});
+
+	test('registers the Webview before database initialization completes', async () => {
+		type StartDatabaseBackedView = <T>(
+			initializeDatabase: () => Promise<T>,
+			registerView: (databaseReady: Promise<T>) => void,
+		) => Promise<T>;
+		const startDatabaseBackedView = (
+			extensionEntry as unknown as {
+				startDatabaseBackedView?: StartDatabaseBackedView;
+			}
+		).startDatabaseBackedView;
+
+		assert.strictEqual(typeof startDatabaseBackedView, 'function');
+
+		let completeInitialization!: (value: string) => void;
+		const initialization = new Promise<string>(resolve => {
+			completeInitialization = resolve;
+		});
+		let registeredDatabase: Promise<string> | undefined;
+
+		const databaseReady = startDatabaseBackedView!(
+			() => initialization,
+			ready => {
+				registeredDatabase = ready;
+			},
+		);
+
+		assert.strictEqual(registeredDatabase, databaseReady);
+		completeInitialization('ready');
+		assert.strictEqual(await databaseReady, 'ready');
 	});
 
 	test('returns empty activity for a missing month directory', () => {
