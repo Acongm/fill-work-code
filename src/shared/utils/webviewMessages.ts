@@ -39,6 +39,31 @@ export const MSG_GET_REPO_DETAIL = 'getRepoDetail';
 export const MSG_OPEN_REPO = 'openRepoInVscode';
 export const MSG_UPDATE_REPO = 'updateRepo';
 
+export interface WebviewStartupGate {
+  isReady(): boolean;
+  acceptReady(activeDate: string): boolean;
+}
+
+export function createWebviewStartupGate(
+  log: (message: string) => void,
+): WebviewStartupGate {
+  let ready = false;
+  log('等待 Webview ready');
+
+  return {
+    isReady: () => ready,
+    acceptReady: (activeDate: string) => {
+      if (ready) {
+        log(`忽略重复 Webview ready: ${activeDate}`);
+        return false;
+      }
+      ready = true;
+      log(`Webview ready: ${activeDate}`);
+      return true;
+    },
+  };
+}
+
 export interface ListReposPayload {
   search?: string;
 }

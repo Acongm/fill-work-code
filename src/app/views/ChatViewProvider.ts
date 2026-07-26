@@ -53,6 +53,10 @@ import {
   handleClearSummaryCache,
 } from '../../daily/commands/dailyMessages';
 import type { Database } from '../../database/types/database';
+import {
+  createWebviewStartupGate,
+  type WebviewStartupGate,
+} from '../../shared/utils/webviewMessages';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'daily-work-log.chatView';
@@ -65,6 +69,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private timesheetRunner: TimesheetRunner;
   private fillCacheService: FillCacheService;
   private outputChannel: vscode.OutputChannel;
+  private startupGate?: WebviewStartupGate;
   private _panelState: HostPanelState = {
     collectRunId: 0,
   };
@@ -87,6 +92,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.fillCacheService = new FillCacheService(storagePath);
     this.outputChannel = vscode.window.createOutputChannel('Daily Work Log');
     this._context.subscriptions.push(this.outputChannel);
+    this.databaseReady.then(
+      () => this.logStartup('SQLite 初始化完成'),
+      error =>
+        this.logStartup(
+          `SQLite 初始化失败: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        ),
+    );
   }
 
   public postToWebview(message: Record<string, unknown>): void {
@@ -97,12 +111,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.outputChannel.show(true);
   }
 
+  private logStartup(message: string): void {
+    this.outputChannel.appendLine(`[启动] ${message}`);
+  }
+
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ) {
     this._view = webviewView;
+    this.startupGate = createWebviewStartupGate(message =>
+      this.logStartup(message),
+    );
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -120,12 +141,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     );
 
     webviewView.onDidChangeVisibility(() => {
-      if (webviewView.visible) {
+      if (webviewView.visible && this.startupGate?.isReady()) {
+        this.logStartup('Webview 恢复可见，刷新当前日期');
         void this._updateWebview();
       }
     });
-
-    setTimeout(() => void this._updateWebview(), 100);
   }
 
   private async _buildDeps(): Promise<HostPanelDeps> {
@@ -172,10 +192,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     switch (data.command) {
       case 'ready':
-        if (typeof data.activeDate === 'string' && data.activeDate) {
-          deps.state.activeDate = data.activeDate;
+        {
+          const activeDate =
+            typeof data.activeDate === 'string' && data.activeDate
+              ? data.activeDate
+              : new Date().toLocaleDateString('en-CA');
+          if (!this.startupGate?.acceptReady(activeDate)) {
+            return;
+          }
+          deps.state.activeDate = activeDate;
+          await this._updateWebview();
         }
-        await this._updateWebview();
         break;
 
       case 'save':

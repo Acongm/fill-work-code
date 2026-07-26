@@ -11,6 +11,7 @@ import {
 	type RemovedWebviewCommand,
 } from '../src/shared/types/webviewMessages';
 import * as extensionEntry from '../src/app/commands/extension';
+import * as webviewMessages from '../src/shared/utils/webviewMessages';
 import { resolveRuntimePaths } from '../src/settings/utils/pathUtils';
 import { aggregateRepoActivity } from '../src/shared/utils/repoRegistry';
 import type { RepoGroup } from '../src/shared/types/repoRegistry';
@@ -74,6 +75,35 @@ suite('Extension Test Suite', () => {
 		assert.strictEqual(registeredDatabase, databaseReady);
 		completeInitialization('ready');
 		assert.strictEqual(await databaseReady, 'ready');
+	});
+
+	test('accepts one ready date before allowing startup refreshes', () => {
+		type StartupGate = {
+			isReady: () => boolean;
+			acceptReady: (activeDate: string) => boolean;
+		};
+		const createWebviewStartupGate = (
+			webviewMessages as unknown as {
+				createWebviewStartupGate?: (
+					log: (message: string) => void,
+				) => StartupGate;
+			}
+		).createWebviewStartupGate;
+
+		assert.strictEqual(typeof createWebviewStartupGate, 'function');
+
+		const logs: string[] = [];
+		const gate = createWebviewStartupGate!(message => logs.push(message));
+
+		assert.strictEqual(gate.isReady(), false);
+		assert.strictEqual(gate.acceptReady('2026-07-17'), true);
+		assert.strictEqual(gate.isReady(), true);
+		assert.strictEqual(gate.acceptReady('2026-07-26'), false);
+		assert.deepStrictEqual(logs, [
+			'等待 Webview ready',
+			'Webview ready: 2026-07-17',
+			'忽略重复 Webview ready: 2026-07-26',
+		]);
 	});
 
 	test('returns empty activity for a missing month directory', () => {
