@@ -4,14 +4,16 @@
 >
 > 目的：记录当前用户可见页面、实际可达功能、Webview 与扩展端的交互边界，作为后续功能调整和代码重构的共同基线。
 
+扩展端与 Webview 均采用 `src/{module}/{commands|views|utils|layout|hooks|types}`。当前模块包括 `app`、`daily`、`collection`、`projects`、`summary`、`settings`、`database`、`preview` 和 `shared`。SQLite 文件固定为存储根目录下的 `work-log.sqlite`；旧 JSON、TSV 和仓库注册表只作为自动迁移输入与过渡版本兼容输出。
+
 ## 1. 产品入口与页面层级
 
 扩展的主要入口是 VS Code Activity Bar 中的“📋 工作日志”，对应 Webview View：
 
 - View ID：`daily-work-log.chatView`
-- 前端入口：`web/src/App.tsx`
-- 扩展端入口：`src/panels/ChatViewProvider.ts`
-- 激活与工具栏命令：`src/extension.ts`
+- 前端入口：`web/src/app/pages/App.tsx`
+- 扩展端入口：`src/app/views/ChatViewProvider.ts`
+- 激活与工具栏命令：`src/app/commands/extension.ts`
 
 ```mermaid
 flowchart TD
@@ -132,12 +134,12 @@ AI 操作需要已配置 API Key。未配置时会提示并打开系统设置。
 
 ### 3.7 主要代码
 
-- 页面与状态：`web/src/App.tsx`
-- 范围切换：`web/src/components/ui/ScopeToggle.tsx`
-- 日期数据：`src/panels/handlers/dailyLogHandler.ts`
-- Git/AI 流程：`src/panels/handlers/collectHandler.ts`
-- 日报预览：`src/panels/handlers/previewHandler.ts`
-- 存储：`src/lib/workLogManager.ts`
+- 页面与状态：`web/src/app/pages/App.tsx`
+- 范围切换：`web/src/shared/views/ScopeToggle.tsx`
+- 日期数据：`src/daily/commands/dailyMessages.ts`
+- Git/AI 流程：`src/collection/commands/collectMessages.ts`
+- 日报预览：`src/preview/commands/previewMessages.ts`
+- 存储：`src/daily/utils/workLogManager.ts`
 
 ## 4. 采集进度页
 
@@ -158,8 +160,8 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 4.3 主要代码
 
-- UI：`web/src/components/ui/CollectLoadingOverlay.tsx`
-- 流程与取消：`src/panels/handlers/collectHandler.ts`
+- UI：`web/src/shared/views/CollectLoadingOverlay.tsx`
+- 流程与取消：`src/collection/commands/collectMessages.ts`
 - 运行日志还会写入 `Daily Work Log` Output Channel。
 
 ## 5. Git 采集确认页
@@ -182,9 +184,9 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 5.3 主要代码
 
-- 页面：`web/src/pages/fill-review/FillReviewOverlay.tsx`
-- Commit 同步：`web/src/components/fill-review/CommitItem.tsx`
-- 写入处理：`src/panels/handlers/collectHandler.ts`
+- 页面：`web/src/collection/pages/FillReviewPage.tsx`
+- Commit 同步：`web/src/collection/views/CommitItem.tsx`
+- 写入处理：`src/collection/commands/collectMessages.ts`
 
 ## 6. AI 润色确认页
 
@@ -205,9 +207,9 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 与 Git 确认页共用：
 
-- `web/src/pages/fill-review/FillReviewOverlay.tsx`
-- `src/panels/handlers/collectHandler.ts`
-- `src/services/aiPolishService.ts`
+- `web/src/collection/pages/FillReviewPage.tsx`
+- `src/collection/commands/collectMessages.ts`
+- `src/collection/utils/aiPolishService.ts`
 
 ## 7. 汇总 Tab
 
@@ -250,10 +252,10 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 7.5 主要代码
 
-- 页面：`web/src/App.tsx`
-- 月度数据：`src/panels/handlers/dailyLogHandler.ts`
-- 工时表、AI 月报：`src/panels/handlers/timesheetHandler.ts`
-- 月报预览：`src/panels/handlers/previewHandler.ts`
+- 页面：`web/src/app/pages/App.tsx`
+- 月度数据：`src/daily/commands/dailyMessages.ts`
+- 工时表、AI 月报：`src/summary/commands/summaryMessages.ts`
+- 月报预览：`src/preview/commands/previewMessages.ts`
 
 ## 8. 材料 Tab
 
@@ -277,8 +279,8 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 8.4 主要代码
 
-- 页面：`web/src/App.tsx`
-- 文件列表、打开、删除、邮件：`src/panels/handlers/timesheetHandler.ts`
+- 页面：`web/src/app/pages/App.tsx`
+- 文件列表、打开、删除、邮件：`src/summary/commands/summaryMessages.ts`
 - 邮件配置：个人中心。
 
 ## 9. 系统设置页
@@ -325,13 +327,13 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 9.6 主要代码
 
-- 页面：`web/src/pages/settings/SettingsOverlay.tsx`
-- 通用字段：`web/src/components/settings/SettingField.tsx`
-- Secret 输入：`web/src/components/ui/SecretField.tsx`
+- 页面：`web/src/settings/pages/SettingsPage.tsx`
+- 通用字段：`web/src/settings/views/SettingField.tsx`
+- Secret 输入：`web/src/shared/views/SecretField.tsx`
 - 设置读写：`src/settings/commands/settingsStore.ts`
 - 统一运行路径：`src/settings/utils/pathUtils.ts`
-- 设置定义：`src/features/settings/pluginSettings.ts`
-- 字段元数据：`src/utils/settingsSchema.ts`
+- 设置定义：`src/settings/types/pluginSettings.ts`
+- 字段元数据：`src/shared/utils/settingsSchema.ts`
 
 ## 10. 个人中心
 
@@ -358,7 +360,7 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 10.2 主要代码
 
-- 页面：`web/src/pages/profile/ProfileOverlay.tsx`
+- 页面：`web/src/settings/pages/ProfilePage.tsx`
 - 设置保存仍复用系统设置的 `savePluginSettings` 流程。
 
 ## 11. 我的仓库
@@ -387,12 +389,12 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 11.3 主要代码
 
-- 列表：`web/src/pages/profile/RepoListView.tsx`
-- 列表项：`web/src/components/repo/RepoListItem.tsx`
-- 详情：`web/src/pages/profile/RepoDetailOverlay.tsx`
-- Clone 标签：`web/src/components/repo/CloneTagBar.tsx`
-- 注册表与活动聚合：`src/utils/repoRegistry.ts`
-- 消息处理：`src/panels/handlers/repoHandler.ts`
+- 列表：`web/src/projects/pages/ProjectListPage.tsx`
+- 列表项：`web/src/projects/views/RepoListItem.tsx`
+- 详情：`web/src/projects/pages/ProjectDetailPage.tsx`
+- Clone 标签：`web/src/projects/views/CloneTagBar.tsx`
+- 注册表与活动聚合：`src/shared/utils/repoRegistry.ts`
+- 消息处理：`src/projects/commands/projectMessages.ts`
 
 ## 12. 独立 Markdown 预览 Panel
 
@@ -416,7 +418,7 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 12.4 主要代码
 
-- `src/panels/handlers/previewHandler.ts`
+- `src/preview/commands/previewMessages.ts`
 
 ## 13. Webview 消息与处理器映射
 
@@ -492,7 +494,7 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 16.3 消息协议未类型化
 
-前端和扩展端都大量使用字符串命令与 `any`，字段拼写错误只能在运行时发现。仓库已有 `src/utils/webviewMessages.ts` 常量，但主分发和前端并未统一使用。
+前端和扩展端都大量使用字符串命令与 `any`，字段拼写错误只能在运行时发现。仓库已有 `src/shared/utils/webviewMessages.ts` 常量，但主分发和前端并未统一使用。
 
 ### 16.4 类型与配置模型重复
 

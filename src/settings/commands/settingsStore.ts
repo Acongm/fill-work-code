@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import {
   DEFAULT_PLUGIN_SETTINGS,
   type PluginSettings,
-} from '../../features/settings/pluginSettings';
-import { normalizeAiSystemPromptForSave } from '../../features/settings/aiSystemPrompt';
-import { resolveOriginFilters } from '../../utils/originFilter';
+} from '../types/pluginSettings';
+import { normalizeAiSystemPromptForSave } from '../utils/aiSystemPrompt';
+import { resolveOriginFilters } from '../../shared/utils/originFilter';
 import type {
   PluginSecretUpdates,
   RuntimeConfiguration,

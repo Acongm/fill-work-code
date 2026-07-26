@@ -11,8 +11,8 @@ import {
 	type RemovedWebviewCommand,
 } from '../src/shared/types/webviewMessages';
 import { resolveRuntimePaths } from '../src/settings/utils/pathUtils';
-import { aggregateRepoActivity } from '../src/utils/repoRegistry';
-import type { RepoGroup } from '../src/utils/types/repoRegistry';
+import { aggregateRepoActivity } from '../src/shared/utils/repoRegistry';
+import type { RepoGroup } from '../src/shared/types/repoRegistry';
 // import * as myExtension from '../../extension';
 
 suite('Extension Test Suite', () => {

@@ -1,9 +1,9 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { DailyLog } from '../../utils/types/dailyLog';
-import { parseCommitsTsv, type ParsedCommitRow } from '../../utils/parseCommitsTsv';
-import type { ReposRegistry } from '../../utils/types/repoRegistry';
+import type { DailyLog } from '../../shared/types/dailyLog';
+import { parseCommitsTsv, type ParsedCommitRow } from '../../shared/utils/parseCommitsTsv';
+import type { ReposRegistry } from '../../shared/types/repoRegistry';
 
 export type LegacySourceKind = 'registry' | 'commits' | 'daily';
 

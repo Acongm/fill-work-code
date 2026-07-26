@@ -11,8 +11,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@host-utils/*": ["../src/utils/*"]
+      "@host-utils/*": ["../src/shared/*"]
     }
   },
-  "include": ["src", "../src/utils/fillAnchor.ts"]
+  "include": ["src", "../src/shared/utils/fillAnchor.ts"]
 }
