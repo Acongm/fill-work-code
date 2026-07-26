@@ -231,10 +231,10 @@
     "release:major": "node scripts/release/index.mjs major",
     "release:app": "node scripts/release-app.mjs",
     "release:app:status": "node scripts/release/status.mjs",
-    "compile-tests": "tsc -p tsconfig.json --outDir out",
+    "compile-tests": "tsc -p tsconfig.test.json",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint -c eslint.config.mjs src web/src",
-    "test": "vscode-test",
+    "test": "vscode-test --fail-zero",
     "publish:marketplace": "npm run compile && npx vsce publish --no-yarn --no-dependencies --allow-missing-repository --skip-duplicate"
   },
   "devDependencies": {

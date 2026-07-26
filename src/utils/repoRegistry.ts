@@ -264,6 +264,9 @@ export function aggregateRepoActivity(
       : [];
 
   for (const monthDir of monthDirs) {
+    if (!fs.existsSync(monthDir)) {
+      continue;
+    }
     const tsvPath = path.join(monthDir, '_commits.tsv');
     if (fs.existsSync(tsvPath)) {
       const rows = parseCommitsTsv(fs.readFileSync(tsvPath, 'utf-8'));

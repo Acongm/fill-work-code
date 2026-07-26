@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { DailyLog } from '../../lib/workLogManager';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const ExcelJS = require('exceljs');
 import type { HostPanelDeps } from './types';
 

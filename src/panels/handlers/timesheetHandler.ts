@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import type { DailyLog } from '../../lib/workLogManager';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const ExcelJS = require('exceljs');
 import type { HostPanelDeps } from './types';
 import { expandHome, getDisplayName, resolveStoragePath } from './panelUtils';

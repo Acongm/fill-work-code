@@ -1,8 +1,13 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
 import * as vscode from 'vscode';
+import { aggregateRepoActivity } from '../src/utils/repoRegistry';
+import type { RepoGroup } from '../src/utils/types/repoRegistry';
 // import * as myExtension from '../../extension';
 
 suite('Extension Test Suite', () => {
@@ -11,5 +16,29 @@ suite('Extension Test Suite', () => {
 	test('Sample test', () => {
 		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
 		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
+	});
+
+	test('returns empty activity for a missing month directory', () => {
+		const storagePath = fs.mkdtempSync(path.join(os.tmpdir(), 'daily-work-log-'));
+		const group: RepoGroup = {
+			originUrl: 'https://example.com/acme/repo.git',
+			repoName: 'repo',
+			clones: [],
+			cloneCount: 0,
+		};
+
+		try {
+			const activity = aggregateRepoActivity(storagePath, group, {
+				month: '2026-07',
+			});
+
+			assert.deepStrictEqual(activity, {
+				commits: [],
+				gitlogLines: [],
+				ailogLines: [],
+			});
+		} finally {
+			fs.rmSync(storagePath, { recursive: true, force: true });
+		}
 	});
 });
