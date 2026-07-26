@@ -27,7 +27,6 @@ dist/
 # VS Code Extension
 # ================================
 .vscode-test/
-.vscode-test.mjs
 
 # ================================
 # Python

@@ -243,6 +243,7 @@
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
+    "@types/sql.js": "^1.4.11",
     "@types/vscode": "1.85.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
@@ -255,6 +256,7 @@
   },
   "dependencies": {
     "exceljs": "^4.4.0",
-    "markdown-it": "^14.1.0"
+    "markdown-it": "^14.1.0",
+    "sql.js": "^1.14.1"
   }
 }
