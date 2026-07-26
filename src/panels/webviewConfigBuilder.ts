@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import type { HostPanelDeps } from './handlers/types';
-import { getRepositoryOptions } from './handlers/panelUtils';
 import { loadPluginSettings } from './handlers/settingsHandler';
 import { loadRuntimeConfiguration } from '../settings/commands/settingsStore';
+import { loadDailyProjection } from './handlers/dailyLogHandler';
+import { ProjectRepository } from '../database/commands/projectRepository';
 
 export async function buildWebConfig(deps: HostPanelDeps) {
   const settings = await loadPluginSettings(deps);
@@ -45,19 +46,18 @@ export async function updateWebview(deps: HostPanelDeps): Promise<void> {
   if (!deps.view) {
     return;
   }
-  const todayLog = deps.workLogManager.getTodayLog();
-  const activeDate = deps.state.activeDate ?? todayLog.date;
-  const displayLog =
-    deps.workLogManager.getDailyLog(new Date(`${activeDate}T12:00:00`)) ?? {
-      ...todayLog,
-      date: activeDate,
-    };
+  const activeDate =
+    deps.state.activeDate ?? new Date().toLocaleDateString('en-CA');
+  const projection = loadDailyProjection(deps, activeDate);
   const config = await buildWebConfig(deps);
   deps.view.webview.postMessage({
     command: 'init',
-    todayLog: displayLog,
+    todayLog: projection.log,
+    items: projection.items,
     activeDate,
-    repositoryOptions: getRepositoryOptions(activeDate.slice(0, 7)),
+    repositoryOptions: new ProjectRepository(deps.database)
+      .list('', false)
+      .map((project) => project.originUrl),
     config,
   });
 }

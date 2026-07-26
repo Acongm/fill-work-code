@@ -7,6 +7,10 @@ import { openSqlJsDatabase } from './database/utils/sqlJsDatabase';
 import { migrateSchema } from './database/commands/migrateSchema';
 import { migrateLegacyData } from './database/commands/legacyMigrator';
 import { resolveRuntimePaths } from './settings/utils/pathUtils';
+import { collectAiConversations } from './collection/commands/collectAiConversations';
+import { CodexConversationCollector } from './collection/utils/codexConversationCollector';
+import { CursorConversationCollector } from './collection/utils/cursorConversationCollector';
+import { QoderConversationCollector } from './collection/utils/qoderConversationCollector';
 
 let workLogManager: WorkLogManager;
 let database: Database | undefined;
@@ -72,6 +76,29 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('daily-work-log.openOutput', () => {
       chatViewProvider.showOutput();
     }),
+    vscode.commands.registerCommand(
+      'daily-work-log.collectAiConversations',
+      async () => {
+        if (!database) {
+          return;
+        }
+        const result = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: '正在采集 Codex、Cursor、Qoder 对话…',
+          },
+          () =>
+            collectAiConversations(database!, [
+              new CodexConversationCollector(),
+              new CursorConversationCollector(),
+              new QoderConversationCollector(),
+            ]),
+        );
+        vscode.window.showInformationMessage(
+          `AI 对话采集完成：${result.sessions} 个会话，${result.messages} 条消息，${result.diagnostics.length} 个跳过/警告。`,
+        );
+      },
+    ),
     vscode.commands.registerCommand('daily-work-log.openPanelSettings', () => {
       post({ command: 'openPanelSettings' });
       vscode.commands.executeCommand('workbench.view.extension.daily-work-log');

@@ -33,7 +33,8 @@
     "onCommand:daily-work-log.openPanelSettings",
     "onCommand:daily-work-log.refresh",
     "onCommand:daily-work-log.openProfile",
-    "onCommand:daily-work-log.openOutput"
+    "onCommand:daily-work-log.openOutput",
+    "onCommand:daily-work-log.collectAiConversations"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -84,6 +85,11 @@
         "title": "打开日志",
         "category": "Work Log",
         "icon": "$(output)"
+      },
+      {
+        "command": "daily-work-log.collectAiConversations",
+        "title": "采集 Codex / Cursor / Qoder 对话",
+        "category": "Work Log"
       }
     ],
     "menus": {

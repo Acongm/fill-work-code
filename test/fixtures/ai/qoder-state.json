@@ -1,0 +1,9 @@
+{
+  "sessionId": "qoder-fixture",
+  "cwd": "/tmp/project-a",
+  "title": "Qoder fixture",
+  "messages": [
+    { "id": "qoder-user", "role": "user", "content": "Qoder complete question" },
+    { "id": "qoder-assistant", "role": "assistant", "content": "Qoder complete answer" }
+  ]
+}

@@ -163,7 +163,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'save':
-        await handleSave(deps, data.log);
+        await handleSave(deps, data.log, data.items);
         break;
 
       case 'loadDate':
