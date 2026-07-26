@@ -3,7 +3,7 @@
   "displayName": "Daily Work Log",
   "description": "Daily work log management with date-based organization, form collection, and AI summary generation",
   "version": "0.1.13",
-  "packageManager": "yarn@3.8.1",
+  "packageManager": "yarn@1.22.22",
   "publisher": "acongm",
   "license": "MIT",
   "repository": {
@@ -191,7 +191,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "node esbuild.mjs && node scripts/build-webview.mjs",
     "build:webview": "node scripts/build-webview.mjs",
-    "install:all": "npm install && npm --prefix web install",
+    "install:all": "yarn install --frozen-lockfile && npm --prefix web install",
     "build:all": "npm run compile",
     "watch": "node esbuild.mjs --watch",
     "watch:webview": "npm --prefix web run build -- --watch",
