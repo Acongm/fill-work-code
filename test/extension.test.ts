@@ -10,6 +10,7 @@ import {
 	isRemovedWebviewCommand,
 	type RemovedWebviewCommand,
 } from '../src/shared/types/webviewMessages';
+import { resolveRuntimePaths } from '../src/settings/utils/pathUtils';
 import { aggregateRepoActivity } from '../src/utils/repoRegistry';
 import type { RepoGroup } from '../src/utils/types/repoRegistry';
 // import * as myExtension from '../../extension';
@@ -33,6 +34,14 @@ suite('Extension Test Suite', () => {
 		for (const command of removed) {
 			assert.strictEqual(isRemovedWebviewCommand(command), true);
 		}
+	});
+
+	test('all runtime paths share the configured storage root', () => {
+		const paths = resolveRuntimePaths('/tmp/work-logs');
+
+		assert.strictEqual(paths.database, '/tmp/work-logs/work-log.sqlite');
+		assert.strictEqual(paths.runtime, '/tmp/work-logs/.runtime');
+		assert.strictEqual(paths.month(2026, 7), '/tmp/work-logs/2026-07');
 	});
 
 	test('returns empty activity for a missing month directory', () => {

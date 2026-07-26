@@ -5,7 +5,6 @@ import { SettingsFieldGroup } from '../../components/settings/SettingField';
 
 export interface PluginSettingsForm {
   displayName: string;
-  outputDir: string;
   searchRoots: string;
   originFilters: string;
   authorAliases: string;

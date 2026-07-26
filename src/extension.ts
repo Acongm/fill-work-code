@@ -1,20 +1,14 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as os from 'os';
 import { WorkLogManager } from './lib/workLogManager';
 import { ChatViewProvider } from './panels/ChatViewProvider';
+import { loadRuntimeConfiguration } from './settings/commands/settingsStore';
 
 let workLogManager: WorkLogManager;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Daily Work Log extension activated');
 
-  let storageDir = vscode.workspace
-    .getConfiguration('dailyWorkLog')
-    .get<string>('storagePath');
-  if (!storageDir) {
-    storageDir = path.join(os.homedir(), '.work-logs');
-  }
+  const storageDir = loadRuntimeConfiguration().storagePathResolved;
 
   workLogManager = new WorkLogManager(storageDir);
   console.log(`Work logs storage: ${storageDir}`);

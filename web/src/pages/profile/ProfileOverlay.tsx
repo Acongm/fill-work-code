@@ -79,13 +79,6 @@ export const ProfileOverlay: React.FC<ProfileOverlayProps> = ({
                 />
               </div>
               <div className="setting-row">
-                <label>生成输出目录（留空则用存储目录）</label>
-                <input
-                  value={settings.outputDir}
-                  onChange={(e) => onChange({ ...settings, outputDir: e.target.value })}
-                />
-              </div>
-              <div className="setting-row">
                 <label>工时表内容字段</label>
                 <select
                   value={settings.timesheetContentField}

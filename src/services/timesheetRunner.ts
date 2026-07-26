@@ -11,7 +11,6 @@ export interface TimesheetGenerateOptions {
   year: number;
   month: number;
   workLogDir: string;
-  outputDir: string;
   settings: PluginSettings;
   includeLoggedNonWorkdays?: boolean;
 }
@@ -35,20 +34,19 @@ export class TimesheetRunner {
     }
 
     const monthKey = `${options.year}-${String(options.month).padStart(2, '0')}`;
-    const outputDir =
-      options.outputDir.trim() || path.join(options.workLogDir, monthKey);
-    fs.mkdirSync(outputDir, { recursive: true });
+    const monthDir = path.join(options.workLogDir, monthKey);
+    fs.mkdirSync(monthDir, { recursive: true });
 
     const displayName = options.settings.displayName.trim() || 'User';
     const company = options.settings.timesheet?.company?.trim() || '';
     const approver = options.settings.timesheet?.approver?.trim() || '';
     const yyyymm = `${options.year}${String(options.month).padStart(2, '0')}`;
     const timesheetPath = path.join(
-      outputDir,
+      monthDir,
       `Timesheet-${displayName}_${yyyymm}.xlsx`,
     );
     const artifactPath = path.join(
-      outputDir,
+      monthDir,
       `交付物_${displayName}_${yyyymm}.xlsx`,
     );
 
@@ -61,7 +59,7 @@ export class TimesheetRunner {
       '--work-log-dir',
       options.workLogDir,
       '--output-dir',
-      outputDir,
+      monthDir,
       '--source-fields',
       options.settings.timesheetContentField || 'ailog',
       '--psp-name',

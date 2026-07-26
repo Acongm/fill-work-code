@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import type { DailyLog } from '../../lib/workLogManager';
 const ExcelJS = require('exceljs');
 import type { HostPanelDeps } from './types';
-import { expandHome, getDisplayName, resolveStoragePath } from './panelUtils';
+import { getDisplayName, resolveStoragePath } from './panelUtils';
+import { resolveRuntimePaths } from '../../settings/utils/pathUtils';
 import { loadPluginSettings } from './settingsHandler';
 
 function parseDailyGitlogMarkdown(filePath: string): Record<string, string[]> {
@@ -154,10 +155,7 @@ export async function generateTimesheet(
   try {
     const pluginSettings = await loadPluginSettings(deps);
     const storagePath = resolveStoragePath();
-    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
-    const outputDir = pluginSettings.outputDir.trim()
-      ? expandHome(pluginSettings.outputDir)
-      : path.join(storagePath, monthKey);
+    const monthDir = resolveRuntimePaths(storagePath).month(year, month);
 
     mergeGitlogIntoDailyLogs(deps, year, month);
 
@@ -173,7 +171,6 @@ export async function generateTimesheet(
           year,
           month,
           workLogDir: storagePath,
-          outputDir,
           settings: pluginSettings,
           includeLoggedNonWorkdays,
         }),
@@ -197,7 +194,7 @@ export async function generateTimesheet(
       if (action === '打开文件夹') {
         vscode.commands.executeCommand(
           'revealFileInOS',
-          vscode.Uri.file(outputDir),
+          vscode.Uri.file(monthDir),
         );
       } else if (action === '在 Finder 中显示') {
         vscode.commands.executeCommand(

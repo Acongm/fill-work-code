@@ -900,7 +900,7 @@ async function main() {
   );
 
   const [y, m] = config.month.split('/');
-  const monthDir = join(resolve(config.outputDir), `${y}-${m}`);
+  const monthDir = join(resolve(config.storageRoot), `${y}-${m}`);
   mkdirSync(monthDir, { recursive: true });
 
   let sortedDays = [];

@@ -2,7 +2,6 @@ export type AiPresetId = 'deepseek' | 'mimo' | 'custom';
 
 export interface PluginSettings {
   displayName: string;
-  outputDir: string;
   searchRoots: string[];
   /**
    * Git 远程地址过滤（留空=不过滤，保留全部仓库）。
@@ -61,7 +60,6 @@ export interface PluginSettings {
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   displayName: '',
-  outputDir: '',
   searchRoots: ['~/code'],
   originFilters: [],
   authorAliases: [],

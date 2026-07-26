@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import type { DailyLog } from '../../lib/workLogManager';
 import type { HostPanelDeps } from './types';
-import { expandHome, getRepositoryOptions, resolveStoragePath } from './panelUtils';
-import { loadPluginSettings } from './settingsHandler';
+import { getRepositoryOptions, resolveStoragePath } from './panelUtils';
+import { resolveRuntimePaths } from '../../settings/utils/pathUtils';
 
 const emptyLog = (date: string): DailyLog => ({
   date,
@@ -56,13 +55,8 @@ export async function handleLoadMonthLogs(
 ): Promise<void> {
   try {
     const monthlyLogs = deps.workLogManager.getMonthlyLogs(year, month);
-    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
     const storagePath = resolveStoragePath();
-    const settings = await loadPluginSettings(deps);
-    const outputDir = settings.outputDir.trim()
-      ? expandHome(settings.outputDir)
-      : storagePath;
-    const monthDir = path.join(outputDir, monthKey);
+    const monthDir = resolveRuntimePaths(storagePath).month(year, month);
     monthlyLogs.logs = deps.gitEvidenceService.enrichLogsFromCommits(
       monthDir,
       monthlyLogs.logs,

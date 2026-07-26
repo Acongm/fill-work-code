@@ -1,7 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import {
   type CollectRequest,
   formatFillAnchorLabel,
@@ -30,18 +29,9 @@ import {
   mergeTsvContent,
   saveGitEvidenceMeta,
 } from '../utils/commitsTsvStore';
+import { resolveRuntimePaths } from '../settings/utils/pathUtils';
 
 export { resolveFillDateRange, resolveFillDates } from '../utils/fillAnchor';
-
-function expandHome(inputPath: string): string {
-  if (inputPath.startsWith('~/')) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  if (inputPath === '~') {
-    return os.homedir();
-  }
-  return inputPath;
-}
 
 function normalizeCommitDay(raw: string): string {
   const trimmed = raw.trim();
@@ -101,9 +91,7 @@ export class GitEvidenceService {
     onLog?: (line: string) => void,
   ): Promise<FillPreview> {
     const dates = resolveCollectDates(request);
-    const outputDir = settings.outputDir.trim()
-      ? expandHome(settings.outputDir)
-      : expandHome(this.storagePath);
+    const storageRoot = resolveRuntimePaths(this.storagePath).root;
     const searchConfig = buildFillCacheSearchConfig(settings);
     const configHash = fillCacheConfigHash(searchConfig);
     const forceRescan = request.forceRescan ?? false;
@@ -112,7 +100,7 @@ export class GitEvidenceService {
     try {
       for (const monthKey of monthKeys) {
         const monthDates = dates.filter((date) => date.startsWith(monthKey));
-        const monthDir = path.join(outputDir, monthKey);
+        const monthDir = path.join(storageRoot, monthKey);
         const gitlogDir = path.join(monthDir, 'gitlog');
         fs.mkdirSync(gitlogDir, { recursive: true });
 
@@ -138,7 +126,7 @@ export class GitEvidenceService {
         }
 
         const scanRequest = narrowCollectRequestToDates(request, needing);
-        await this.runEvidenceScript(monthKey, outputDir, settings, scanRequest, onLog);
+        await this.runEvidenceScript(monthKey, storageRoot, settings, scanRequest, onLog);
 
         const incomingContent = fs.readFileSync(commitsPath, 'utf-8');
         const frozenSet =
@@ -148,7 +136,7 @@ export class GitEvidenceService {
         const scanSet = new Set(needing);
         const merged = mergeTsvContent(existingContent, incomingContent, frozenSet, scanSet);
         fs.writeFileSync(commitsPath, merged, 'utf-8');
-        upsertFromTsv(outputDir, commitsPath);
+        upsertFromTsv(storageRoot, commitsPath);
 
         const updatedMeta = markFrozenDates(meta, needing, configHash);
         saveGitEvidenceMeta(monthDir, updatedMeta);
@@ -173,7 +161,7 @@ export class GitEvidenceService {
       };
     }
 
-    const days = this.buildDaysFromCommits(dates, outputDir, existingLogs);
+    const days = this.buildDaysFromCommits(dates, storageRoot, existingLogs);
 
     return {
       scope: request.scope,
@@ -188,7 +176,7 @@ export class GitEvidenceService {
 
   private buildDaysFromCommits(
     dates: string[],
-    outputDir: string,
+    storageRoot: string,
     existingLogs: Record<string, DailyLog | null>,
   ): FillPreviewDay[] {
     const monthKeys = monthKeysForDates(dates);
@@ -197,7 +185,7 @@ export class GitEvidenceService {
     let dailyOrigins: Record<string, string[]> = {};
 
     for (const monthKey of monthKeys) {
-      const monthDir = path.join(outputDir, monthKey);
+      const monthDir = path.join(storageRoot, monthKey);
       const commitsPath = path.join(monthDir, '_commits.tsv');
       const gitlogDir = path.join(monthDir, 'gitlog');
       dailyGitlog = {
@@ -232,22 +220,22 @@ export class GitEvidenceService {
 
   private runEvidenceScript(
     monthKey: string,
-    outputDir: string,
+    storageRoot: string,
     settings: PluginSettings,
     request: CollectRequest,
     onLog?: (line: string) => void,
   ): Promise<void> {
     const scriptPath = path.join(this.extensionPath, 'scripts', 'generate-evidence.mjs');
     const bashDir = path.join(this.extensionPath, 'scripts', 'bash');
-    const runtimeDir = path.join(outputDir, '.runtime');
+    const runtimeDir = resolveRuntimePaths(storageRoot).runtime;
     fs.mkdirSync(runtimeDir, { recursive: true });
     const configPath = path.join(runtimeDir, 'collect-config.json');
-    const registry = loadRegistry(outputDir);
+    const registry = loadRegistry(storageRoot);
     const knownRepoRoots = getKnownRepoRoots(registry);
     const [year, month] = monthKey.split('-');
     const config = {
       month: `${year}/${month}`,
-      outputDir,
+      storageRoot,
       skillScriptsDir: bashDir,
       searchRoots: settings.searchRoots,
       originFilters: resolveOriginFilters(settings),
@@ -306,7 +294,7 @@ export class GitEvidenceService {
       );
       onLog?.(`扫描窗口: ${range.startDate} ~ ${range.endDate}（仅导出该区间内 commit）`);
       onLog?.(`目标写入日: ${range.dates.join(', ')}`);
-      onLog?.(`输出目录: ${outputDir}`);
+      onLog?.(`存储目录: ${storageRoot}`);
       child.stdout.on('data', (c) => append(c, false));
       child.stderr.on('data', (c) => append(c, true));
       child.on('error', (err) => {

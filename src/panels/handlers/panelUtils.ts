@@ -1,28 +1,15 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import type { HostPanelDeps } from './types';
+import { resolveRuntimePaths } from '../../settings/utils/pathUtils';
 
-export function expandHome(inputPath: string): string {
-  if (inputPath.startsWith('~/')) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  if (inputPath === '~') {
-    return os.homedir();
-  }
-  return inputPath;
-}
+export { expandHome } from '../../settings/utils/pathUtils';
 
 export function resolveStoragePath(): string {
   const config = vscode.workspace.getConfiguration('dailyWorkLog');
-  let storagePath = config.get<string>('storagePath') || '~/.work-logs';
-  if (storagePath.startsWith('~/')) {
-    storagePath = path.join(os.homedir(), storagePath.slice(2));
-  } else if (storagePath === '~') {
-    storagePath = os.homedir();
-  }
-  return storagePath;
+  const storagePath = config.get<string>('storagePath') || '~/.work-logs';
+  return resolveRuntimePaths(storagePath).root;
 }
 
 export function getRepositoryOptions(yearMonth: string): string[] {

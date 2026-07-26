@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import type { HostPanelDeps } from './types';
 import { loadPluginSettings } from './settingsHandler';
-import { expandHome } from './panelUtils';
 import {
   aggregateRepoActivity,
   getRepoById,
@@ -12,17 +11,15 @@ import {
   updateRepoFlags,
 } from '../../utils/repoRegistry';
 
-async function resolveRepoRegistryRoot(deps: HostPanelDeps): Promise<string> {
-  const settings = await loadPluginSettings(deps);
-  const outputDir = settings.outputDir.trim();
-  return outputDir ? expandHome(outputDir) : deps.workLogManager.getStorageDir();
+function resolveRepoRegistryRoot(deps: HostPanelDeps): string {
+  return deps.workLogManager.getStorageDir();
 }
 
 export async function handleListRepos(
   deps: HostPanelDeps,
   search?: string,
 ): Promise<void> {
-  const registryRoot = await resolveRepoRegistryRoot(deps);
+  const registryRoot = resolveRepoRegistryRoot(deps);
   const registry = loadRegistry(registryRoot);
   const groups = listRepoGroups(registry, { search });
   deps.postToWebview({ command: 'reposListed', groups });
@@ -34,7 +31,7 @@ export async function handleGetRepoDetail(
   cloneId?: string,
   month?: string,
 ): Promise<void> {
-  const registryRoot = await resolveRepoRegistryRoot(deps);
+  const registryRoot = resolveRepoRegistryRoot(deps);
   const registry = loadRegistry(registryRoot);
   const group = getRepoGroupByOrigin(registry, originUrl);
   if (!group) {
@@ -49,7 +46,7 @@ export async function handleOpenRepo(
   deps: HostPanelDeps,
   repoId: string,
 ): Promise<void> {
-  const registryRoot = await resolveRepoRegistryRoot(deps);
+  const registryRoot = resolveRepoRegistryRoot(deps);
   const registry = loadRegistry(registryRoot);
   const repo = getRepoById(registry, repoId);
   if (!repo) {
@@ -77,7 +74,7 @@ export async function handleUpdateRepo(
   repoId: string,
   flags: { pinned?: boolean; hidden?: boolean },
 ): Promise<void> {
-  const registryRoot = await resolveRepoRegistryRoot(deps);
+  const registryRoot = resolveRepoRegistryRoot(deps);
   let registry = loadRegistry(registryRoot);
   registry = updateRepoFlags(registry, repoId, flags);
   saveRegistry(registryRoot, registry);

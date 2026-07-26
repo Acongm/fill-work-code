@@ -242,7 +242,6 @@ export const App: React.FC = () => {
     defaultPrompt = '',
   ): PluginSettingsForm => ({
     displayName: raw?.displayName || 'User',
-    outputDir: raw?.outputDir || '',
     searchRoots: (raw?.searchRoots || []).join(', '),
     originFilters: (
       raw?.originFilters?.length

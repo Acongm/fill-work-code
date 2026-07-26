@@ -2,17 +2,18 @@ import * as vscode from 'vscode';
 import type { HostPanelDeps } from './handlers/types';
 import { getRepositoryOptions } from './handlers/panelUtils';
 import { loadPluginSettings } from './handlers/settingsHandler';
+import { loadRuntimeConfiguration } from '../settings/commands/settingsStore';
 
 export async function buildWebConfig(deps: HostPanelDeps) {
   const settings = await loadPluginSettings(deps);
   const optional = new Set(settings.visibleFields);
-  const vsConfig = vscode.workspace.getConfiguration('dailyWorkLog');
+  const runtimeConfig = loadRuntimeConfiguration();
   const hasPassword = Boolean(
     await deps.context.secrets.get('dailyWorkLog.email.password'),
   );
   return {
-    storagePath: vsConfig.get<string>('storagePath') || '~/.work-logs',
-    autoSave: vsConfig.get<boolean>('autoSave') ?? true,
+    storagePath: runtimeConfig.storagePath,
+    autoSave: runtimeConfig.autoSave,
     timesheetFullDateEnabled: settings.timesheetFullDateEnabled,
     aiEnabled: settings.aiEnabled,
     dailySyncFieldVisibility: settings.dailySyncFieldVisibility,

@@ -328,7 +328,8 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 - 页面：`web/src/pages/settings/SettingsOverlay.tsx`
 - 通用字段：`web/src/components/settings/SettingField.tsx`
 - Secret 输入：`web/src/components/ui/SecretField.tsx`
-- 设置读写：`src/panels/handlers/settingsHandler.ts`
+- 设置读写：`src/settings/commands/settingsStore.ts`
+- 统一运行路径：`src/settings/utils/pathUtils.ts`
 - 设置定义：`src/features/settings/pluginSettings.ts`
 - 字段元数据：`src/utils/settingsSchema.ts`
 
@@ -341,7 +342,7 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 #### 导出与显示
 
 - 显示姓名；
-- 生成输出目录；
+- 所有数据库、采集缓存和月份材料统一使用日志存储路径；
 - 工时表内容字段：AILog、Completed、GitLog 或 GitCommit；
 - 日报是否同步字段显示控制；
 - 汇总额外显示字段。

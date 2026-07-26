@@ -1,29 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import type { DailyLog, MonthlyLog } from '../utils/types/dailyLog';
+import { resolveRuntimePaths } from '../settings/utils/pathUtils';
 
 export type { DailyLog, MonthlyLog } from '../utils/types/dailyLog';
-
-/**
- * 展开路径中的 ~ 为用户主目录
- */
-function expandHomePath(inputPath: string): string {
-  if (inputPath.startsWith('~/')) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  if (inputPath === '~') {
-    return os.homedir();
-  }
-  return inputPath;
-}
 
 export class WorkLogManager {
   private storageDir: string;
 
   constructor(storageDir: string) {
-    // 展开 ~ 路径
-    this.storageDir = expandHomePath(storageDir);
+    this.storageDir = resolveRuntimePaths(storageDir).root;
     this.ensureStorageDir();
   }
 
@@ -39,8 +25,10 @@ export class WorkLogManager {
 
   private getYearMonthDir(date: Date): string {
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const dirPath = path.join(this.storageDir, `${year}-${month}`);
+    const dirPath = resolveRuntimePaths(this.storageDir).month(
+      year,
+      date.getMonth() + 1,
+    );
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
@@ -48,8 +36,7 @@ export class WorkLogManager {
   }
 
   private getMonthDir(year: number, month: number): string {
-    const monthStr = String(month).padStart(2, '0');
-    const dirPath = path.join(this.storageDir, `${year}-${monthStr}`);
+    const dirPath = resolveRuntimePaths(this.storageDir).month(year, month);
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }

@@ -74,13 +74,6 @@ export const SETTINGS_FIELDS: SettingFieldDef[] = [
     section: 'display',
   },
   {
-    key: 'outputDir',
-    label: '输出目录',
-    type: 'text',
-    section: 'display',
-    placeholder: '留空使用存储目录',
-  },
-  {
     key: 'timesheet.company',
     label: '工时表公司',
     type: 'text',
