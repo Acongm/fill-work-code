@@ -1,4 +1,5 @@
 import * as esbuild from 'esbuild';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,11 +29,19 @@ const ctx = await esbuild.context({
   plugins: [aliasAtPlugin],
 });
 
+const copySqlJsWasm = () =>
+  fs.copyFileSync(
+    path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+    path.join(__dirname, 'dist', 'sql-wasm.wasm'),
+  );
+
 if (watch) {
   await ctx.watch();
+  copySqlJsWasm();
   console.log('[daily-work-log] watching...');
 } else {
   await ctx.rebuild();
   await ctx.dispose();
+  copySqlJsWasm();
   console.log('[daily-work-log] build done');
 }
