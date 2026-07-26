@@ -5,6 +5,7 @@ import type { GitEvidenceService } from '../../services/gitEvidenceService';
 import type { AiPolishService } from '../../services/aiPolishService';
 import type { TimesheetRunner } from '../../services/timesheetRunner';
 import type { FillCacheService } from '../../services/fillCacheService';
+import type { Database } from '../../database/types/database';
 
 export type PostToWebview = (message: Record<string, unknown>) => void;
 
@@ -21,6 +22,7 @@ export interface HostPanelDeps {
   view?: vscode.WebviewView;
   extensionUri: vscode.Uri;
   context: vscode.ExtensionContext;
+  database: Database;
   workLogManager: WorkLogManager;
   gitEvidenceService: GitEvidenceService;
   aiPolishService: AiPolishService;

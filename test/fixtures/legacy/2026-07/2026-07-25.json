@@ -1,0 +1,11 @@
+{
+  "date": "2026-07-25",
+  "completed": ["completed item"],
+  "plan": ["todo item"],
+  "blockers": [],
+  "notes": "",
+  "gitlog": [],
+  "ailog": [],
+  "gitCommit": [],
+  "origin_url": []
+}

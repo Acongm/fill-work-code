@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-25T12:00:00.000Z",
+  "repos": [
+    {
+      "id": "clone-acme",
+      "repoRoot": "/tmp/acme",
+      "repoName": "repo",
+      "originUrl": "https://example.com/acme/repo.git",
+      "cloneLabel": "acme",
+      "firstSeenAt": "2026-07-01T12:00:00.000Z",
+      "lastScannedAt": "2026-07-25T12:00:00.000Z",
+      "lastCommitAt": "2026-07-25",
+      "commitCountTotal": 1,
+      "pinned": false,
+      "hidden": false,
+      "scanMissCount": 0
+    }
+  ]
+}

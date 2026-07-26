@@ -2,21 +2,53 @@ import * as vscode from 'vscode';
 import { WorkLogManager } from './lib/workLogManager';
 import { ChatViewProvider } from './panels/ChatViewProvider';
 import { loadRuntimeConfiguration } from './settings/commands/settingsStore';
+import type { Database } from './database/types/database';
+import { openSqlJsDatabase } from './database/utils/sqlJsDatabase';
+import { migrateSchema } from './database/commands/migrateSchema';
+import { migrateLegacyData } from './database/commands/legacyMigrator';
+import { resolveRuntimePaths } from './settings/utils/pathUtils';
 
 let workLogManager: WorkLogManager;
+let database: Database | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   console.log('Daily Work Log extension activated');
 
-  const storageDir = loadRuntimeConfiguration().storagePathResolved;
+  const runtimeConfig = loadRuntimeConfiguration();
+  const storageDir =
+    process.env.DAILY_WORK_LOG_TEST_STORAGE ||
+    runtimeConfig.storagePathResolved;
 
   workLogManager = new WorkLogManager(storageDir);
   console.log(`Work logs storage: ${storageDir}`);
+
+  try {
+    database = await openSqlJsDatabase(
+      resolveRuntimePaths(storageDir).database,
+    );
+    await migrateSchema(database);
+    const migration = await migrateLegacyData(database, storageDir);
+    if (migration.errors.length > 0) {
+      vscode.window.showWarningMessage(
+        `SQLite 已启用，但 ${migration.errors.length} 个旧数据文件迁移失败，请查看扩展日志。`,
+      );
+      for (const error of migration.errors) {
+        console.warn('Legacy migration failed:', error.path, error.message);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    vscode.window.showErrorMessage(
+      `工作日志数据库初始化失败，已停止加载以保护数据: ${message}`,
+    );
+    throw error;
+  }
 
   const chatViewProvider = new ChatViewProvider(
     context.extensionUri,
     workLogManager,
     context,
+    database,
   );
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
@@ -47,6 +79,8 @@ export function activate(context: vscode.ExtensionContext) {
   );
 }
 
-export function deactivate() {
+export async function deactivate() {
+  await database?.close();
+  database = undefined;
   console.log('Daily Work Log extension deactivated');
 }

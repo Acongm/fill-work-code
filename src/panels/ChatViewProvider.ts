@@ -52,6 +52,7 @@ import {
   handleLoadRepositoryOptions,
   handleClearSummaryCache,
 } from './handlers/dailyLogHandler';
+import type { Database } from '../database/types/database';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'daily-work-log.chatView';
@@ -72,6 +73,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri,
     workLogManager: WorkLogManager,
     private readonly _context: vscode.ExtensionContext,
+    private readonly database: Database,
   ) {
     this.workLogManager = workLogManager;
     this.aiReportGenerator = new AiReportGenerator(workLogManager);
@@ -131,6 +133,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       view: this._view,
       extensionUri: this._extensionUri,
       context: this._context,
+      database: this.database,
       workLogManager: this.workLogManager,
       gitEvidenceService: this.gitEvidenceService,
       aiPolishService: this.aiPolishService,

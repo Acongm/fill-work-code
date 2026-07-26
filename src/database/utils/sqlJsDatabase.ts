@@ -20,7 +20,33 @@ function locateSqlJsWasm(explicitPath?: string): string {
     return bundledPath;
   }
 
-  return require.resolve('sql.js/dist/sql-wasm.wasm');
+  const developmentCandidates = [
+    path.resolve(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      '..',
+      'node_modules',
+      'sql.js',
+      'dist',
+      'sql-wasm.wasm',
+    ),
+    path.join(
+      process.cwd(),
+      'node_modules',
+      'sql.js',
+      'dist',
+      'sql-wasm.wasm',
+    ),
+  ];
+  const developmentPath = developmentCandidates.find((candidate) =>
+    fs.existsSync(candidate),
+  );
+  if (!developmentPath) {
+    throw new Error('Unable to locate sql-wasm.wasm');
+  }
+  return developmentPath;
 }
 
 class PersistentSqlJsDatabase implements WorkLogDatabase {
