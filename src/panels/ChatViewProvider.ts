@@ -31,9 +31,8 @@ import {
 } from './handlers/repoHandler';
 import {
   generateTimesheet,
-  sendEmail,
+  sendMaterialsEmail,
   generateAiAll,
-  listMonthFiles,
   listMaterials,
   openMaterial,
   deleteMaterial,
@@ -46,7 +45,6 @@ import {
   handleUpdateDailyPreview,
   closeDailyPreview,
 } from './handlers/previewHandler';
-import { selectXlsxImport, confirmImport } from './handlers/importHandler';
 import {
   handleSave,
   handleLoadDate,
@@ -67,7 +65,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private fillCacheService: FillCacheService;
   private outputChannel: vscode.OutputChannel;
   private _panelState: HostPanelState = {
-    pendingImportItems: null,
     collectRunId: 0,
   };
 
@@ -182,10 +179,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         await generateTimesheet(deps, data.year, data.month, false, true);
         break;
 
-      case 'sendEmail':
-        await sendEmail(deps, data);
-        break;
-
       case 'openSettings':
       case 'openPanelSettings':
         this._view?.webview.postMessage({ command: 'openPanelSettings' });
@@ -268,20 +261,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         handleClearSummaryCache(deps, data.year, data.month);
         break;
 
-      case 'selectXlsxImport':
-        await selectXlsxImport(deps, data.year, data.month);
-        break;
-
-      case 'confirmImport':
-        await confirmImport(deps, data.year, data.month, data.dates || []);
-        break;
-
       case 'aiGenerateAll':
         await generateAiAll(deps, data.year, data.month);
-        break;
-
-      case 'listMonthFiles':
-        listMonthFiles(deps, data.year, data.month);
         break;
 
       case 'listMaterials':
@@ -301,15 +282,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'sendEmailWithAttachments':
-        await sendEmail(deps, {
+        await sendMaterialsEmail(deps, {
           subject: data.subject,
           body: data.body,
-          attachment: (data.attachments || []).join(','),
+          attachments: data.attachments || [],
         });
-        break;
-
-      case 'refreshConfig':
-        await this._updateWebview();
         break;
 
       case 'getFullConfig':

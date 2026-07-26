@@ -29,11 +29,7 @@
   ],
   "activationEvents": [
     "onView:daily-work-log.chatView",
-    "onCommand:daily-work-log.openForm",
-    "onCommand:daily-work-log.viewMonth",
-    "onCommand:daily-work-log.openStorage",
     "onCommand:daily-work-log.quickOpen",
-    "onCommand:daily-work-log.aiGenerateAll",
     "onCommand:daily-work-log.openPanelSettings",
     "onCommand:daily-work-log.refresh",
     "onCommand:daily-work-log.openProfile",
@@ -61,28 +57,8 @@
     },
     "commands": [
       {
-        "command": "daily-work-log.openForm",
-        "title": "打开每日工作日报",
-        "category": "Work Log"
-      },
-      {
-        "command": "daily-work-log.viewMonth",
-        "title": "查看当月工作汇总",
-        "category": "Work Log"
-      },
-      {
-        "command": "daily-work-log.openStorage",
-        "title": "打开日志存储位置",
-        "category": "Work Log"
-      },
-      {
         "command": "daily-work-log.quickOpen",
         "title": "快速打开",
-        "category": "Work Log"
-      },
-      {
-        "command": "daily-work-log.aiGenerateAll",
-        "title": "AI 润色与总结",
         "category": "Work Log"
       },
       {
@@ -203,15 +179,7 @@
           "description": "Open a side preview panel for daily and monthly reports"
         }
       }
-    },
-    "keybindings": [
-      {
-        "command": "daily-work-log.openForm",
-        "key": "ctrl+alt+d",
-        "mac": "cmd+alt+d",
-        "when": "editorFocus || explorerViewletFocus"
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { WorkLogManager, DailyLog } from '../../lib/workLogManager';
+import type { WorkLogManager } from '../../lib/workLogManager';
 import type { AiReportGenerator } from '../../lib/aiReportGenerator';
 import type { GitEvidenceService } from '../../services/gitEvidenceService';
 import type { AiPolishService } from '../../services/aiPolishService';
@@ -9,7 +9,6 @@ import type { FillCacheService } from '../../services/fillCacheService';
 export type PostToWebview = (message: Record<string, unknown>) => void;
 
 export interface HostPanelState {
-  pendingImportItems: DailyLog[] | null;
   summaryPreviewPanel?: vscode.WebviewPanel;
   dailyPreviewPanel?: vscode.WebviewPanel;
   summaryPreviewTimer?: NodeJS.Timeout;

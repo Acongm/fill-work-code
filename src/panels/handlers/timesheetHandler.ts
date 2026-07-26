@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import type { DailyLog } from '../../lib/workLogManager';
 const ExcelJS = require('exceljs');
 import type { HostPanelDeps } from './types';
@@ -222,42 +221,22 @@ export async function generateTimesheet(
   }
 }
 
-function getAiSummaryPath(year?: number, month?: number): string {
-  if (!year || !month) {
-    return '';
-  }
-  const storagePath = resolveStoragePath();
-  const monthDir = path.join(storagePath, `${year}-${String(month).padStart(2, '0')}`);
-  const aiPath = path.join(monthDir, 'AI_summary.md');
-  return fs.existsSync(aiPath) ? aiPath : '';
+interface MaterialsEmailRequest {
+  subject: string;
+  body: string;
+  attachments: string[];
 }
 
-export async function sendEmail(deps: HostPanelDeps, data: any): Promise<void> {
+export async function sendMaterialsEmail(
+  deps: HostPanelDeps,
+  data: MaterialsEmailRequest,
+): Promise<void> {
   const settings = await loadPluginSettings(deps);
   const smtpHost = settings.email.smtpHost;
 
   if (!smtpHost) {
     vscode.window.showErrorMessage('请先在插件设置中配置邮件 SMTP 服务器');
     return;
-  }
-
-  let attachment = data.attachment || '';
-  if (!attachment && data.year && data.month) {
-    vscode.window.showInformationMessage('正在生成工时表...');
-    const generatedPath = await generateTimesheet(deps, data.year, data.month, true, false);
-    if (generatedPath) {
-      attachment = generatedPath;
-      vscode.window.showInformationMessage(`工时表已生成: ${path.basename(attachment)}`);
-    } else {
-      const proceed = await vscode.window.showWarningMessage(
-        '工时表生成失败，是否继续发送邮件（无附件）？',
-        '继续发送',
-        '取消',
-      );
-      if (proceed !== '继续发送') {
-        return;
-      }
-    }
   }
 
   let password =
@@ -272,13 +251,6 @@ export async function sendEmail(deps: HostPanelDeps, data: any): Promise<void> {
     }
   }
 
-  const storagePath =
-    vscode.workspace.getConfiguration('dailyWorkLog').get<string>('storagePath') ||
-    '~/.work-logs';
-  const expandedPath = storagePath.startsWith('~/')
-    ? path.join(os.homedir(), storagePath.slice(2))
-    : storagePath;
-
   const bundledEmailScript = path.join(
     deps.context.extensionPath,
     'scripts',
@@ -286,7 +258,7 @@ export async function sendEmail(deps: HostPanelDeps, data: any): Promise<void> {
   );
   const emailScript = fs.existsSync(bundledEmailScript)
     ? bundledEmailScript
-    : path.join(expandedPath, 'send_email.py');
+    : path.join(resolveStoragePath(), 'send_email.py');
   const emailScriptContent = `#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import smtplib
@@ -347,12 +319,6 @@ print('Email sent successfully!')
     fs.writeFileSync(emailScript, emailScriptContent, 'utf-8');
   }
 
-  const aiAttachment = getAiSummaryPath(data.year, data.month);
-  let attachments = data.attachment || '';
-  if (aiAttachment) {
-    attachments = attachments ? `${attachments},${aiAttachment}` : aiAttachment;
-  }
-
   const emailConfig = {
     host: settings.email.smtpHost,
     port: settings.email.smtpPort,
@@ -367,7 +333,9 @@ print('Email sent successfully!')
 
   const terminal = vscode.window.createTerminal('Send Email');
   terminal.show();
-  terminal.sendText(`python3 "${emailScript}" '${JSON.stringify(emailConfig)}' "${attachments}"`);
+  terminal.sendText(
+    `python3 "${emailScript}" '${JSON.stringify(emailConfig)}' "${data.attachments.join(',')}"`,
+  );
 
   deps.postToWebview({
     command: 'emailSent',
@@ -442,40 +410,6 @@ function mergeAiLogIntoDailyLogs(deps: HostPanelDeps, aiJsonPath: string): void 
   } catch (e) {
     console.warn('合并 AILog 到每日 JSON 失败:', e);
   }
-}
-
-export function listMonthFiles(
-  deps: HostPanelDeps,
-  year: number,
-  month: number,
-): void {
-  const storagePath = resolveStoragePath();
-  const monthDir = path.join(storagePath, `${year}-${String(month).padStart(2, '0')}`);
-  if (!fs.existsSync(monthDir)) {
-    deps.postToWebview({
-      command: 'monthFiles',
-      files: [],
-    });
-    return;
-  }
-
-  const files = fs.readdirSync(monthDir)
-    .filter(name => !name.startsWith('.'))
-    .map(name => {
-      const fullPath = path.join(monthDir, name);
-      const stat = fs.existsSync(fullPath) ? fs.statSync(fullPath) : null;
-      return {
-        name,
-        path: fullPath,
-        size: stat ? stat.size : 0,
-      };
-    })
-    .filter(item => item.path && item.name !== '_summary.md');
-
-  deps.postToWebview({
-    command: 'monthFiles',
-    files,
-  });
 }
 
 export function listMaterials(deps: HostPanelDeps): void {

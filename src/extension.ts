@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import { WorkLogManager } from './lib/workLogManager';
-import { registerCommands } from './commands/commands';
 import { ChatViewProvider } from './panels/ChatViewProvider';
 
 let workLogManager: WorkLogManager;
@@ -31,8 +30,6 @@ export function activate(context: vscode.ExtensionContext) {
       chatViewProvider,
     ),
   );
-
-  registerCommands(context, workLogManager);
 
   const post = (msg: Record<string, unknown>) => chatViewProvider.postToWebview(msg);
 

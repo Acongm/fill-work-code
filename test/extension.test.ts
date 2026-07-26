@@ -6,6 +6,10 @@ import * as path from 'path';
 // You can import and use all API from the 'vscode' module
 // as well as import your extension to test it
 import * as vscode from 'vscode';
+import {
+	isRemovedWebviewCommand,
+	type RemovedWebviewCommand,
+} from '../src/shared/types/webviewMessages';
 import { aggregateRepoActivity } from '../src/utils/repoRegistry';
 import type { RepoGroup } from '../src/utils/types/repoRegistry';
 // import * as myExtension from '../../extension';
@@ -16,6 +20,19 @@ suite('Extension Test Suite', () => {
 	test('Sample test', () => {
 		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
 		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
+	});
+
+	test('removed Webview commands stay unavailable', () => {
+		const removed: RemovedWebviewCommand[] = [
+			'selectXlsxImport',
+			'confirmImport',
+			'listMonthFiles',
+			'sendEmail',
+		];
+
+		for (const command of removed) {
+			assert.strictEqual(isRemovedWebviewCommand(command), true);
+		}
 	});
 
 	test('returns empty activity for a missing month directory', () => {

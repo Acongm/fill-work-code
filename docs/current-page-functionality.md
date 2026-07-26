@@ -248,25 +248,11 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 - 全日期工时表（仅 `timesheetFullDateEnabled` 开启时显示）；
 - 自动打开并同步月报 Markdown 预览。
 
-### 7.5 Excel 导入
-
-扩展端已实现：
-
-- 选择 XLSX；
-- 自动识别日期列和工作内容列；
-- 按当前月份过滤；
-- 预览并勾选日期；
-- 对已存在日报选择覆盖或跳过；
-- 写入 `completed`。
-
-当前 `App.tsx` 也实现了导入预览 UI，但“选择 XLSX”函数没有绑定到任何可见按钮。因此正常页面操作无法启动导入流程；只有收到 `importPreview` 消息后才会显示预览。
-
-### 7.6 主要代码
+### 7.5 主要代码
 
 - 页面：`web/src/App.tsx`
 - 月度数据：`src/panels/handlers/dailyLogHandler.ts`
 - 工时表、AI 月报：`src/panels/handlers/timesheetHandler.ts`
-- XLSX 导入：`src/panels/handlers/importHandler.ts`
 - 月报预览：`src/panels/handlers/previewHandler.ts`
 
 ## 8. 材料 Tab
@@ -445,9 +431,8 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 | 取消/丢弃 | `cancelCollect` / `discardFillPreview` | `collectHandler` |
 | 工时表 | `generateTimesheet` / `generateTimesheetFull` | `timesheetHandler.generateTimesheet` |
 | 月度 AI | `aiGenerateAll` | `timesheetHandler.generateAiAll` |
-| Excel 导入 | `selectXlsxImport` / `confirmImport` | `importHandler` |
 | 材料 | `listMaterials` / `openMaterial` / `deleteMaterial` | `timesheetHandler` |
-| 邮件 | `sendEmailWithAttachments` | `timesheetHandler.sendEmail` |
+| 邮件 | `sendEmailWithAttachments` | `timesheetHandler.sendMaterialsEmail` |
 | 系统/个人设置 | `getPluginSettings` / `savePluginSettings` | `settingsHandler` |
 | Secret | `revealPluginSecret` | `settingsHandler` |
 | 仓库列表/详情 | `listRepos` / `getRepoDetail` | `repoHandler` |
@@ -458,19 +443,15 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ## 14. 命令面板与兼容页面
 
-除主 Webview 外，扩展还注册了以下命令：
+扩展注册以下主 Webview 辅助命令：
 
-- 打开每日工作日报；
-- 查看当月工作汇总；
-- 打开日志存储位置；
 - 快速打开侧边栏；
 - 打开系统设置；
 - 刷新；
 - 打开个人中心；
-- 打开 Output Channel；
-- AI 润色与总结。
+- 打开 Output Channel。
 
-`openForm` 和 `viewMonth` 仍在 `src/commands/commands.ts` 中创建旧式独立 Webview，代码注释已将 `openForm` 标记为兼容旧命令。它们与 React 主 Webview 是两套实现，后续重构时需要决定保留、迁移或删除。
+旧日报、旧月度汇总独立 Webview 及其命令已经删除，页面功能统一由侧边栏 React Webview 承载。
 
 ## 15. 当前可达性检查
 
@@ -482,13 +463,9 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 | 月度日志 | 是 | 是 | 是 |
 | 工时表 | 是 | 是 | 是 |
 | 全日期工时表 | 是 | 是 | 取决于隐藏设置 |
-| XLSX 导入 | 是 | 预览 UI 已实现 | 否，缺少入口按钮 |
 | 月度 AI 汇总 | 是 | 是 | AI 开启时可达 |
 | 材料浏览/删除/发送 | 是 | 是 | 是 |
-| `listMonthFiles` | 是 | 无消费逻辑 | 否 |
-| `sendEmail` 单工时表流程 | 是 | 无可见入口 | 否 |
 | 仓库 GitLog 展示 | 数据已返回 | 未渲染 | 否 |
-| 旧日报/汇总 Webview | 是 | 独立旧实现 | 命令面板可达 |
 
 ## 16. 后续功能调整前应关注的结构问题
 
@@ -502,7 +479,6 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 - 日报 CRUD；
 - 采集流程；
 - 汇总；
-- 导入；
 - 材料；
 - 设置和 Secret；
 - 三个主 Tab 的完整渲染。
@@ -525,9 +501,9 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 系统设置和个人中心编辑同一个完整设置对象，并复用同一个保存接口。后续增加分区保存、校验或权限控制时，需要明确各设置区的所有权。
 
-### 16.6 可见功能与已实现功能不一致
+### 16.6 已清理的不可达功能
 
-XLSX 导入、单月文件列表、部分邮件流程、仓库 GitLog 等已有后端或状态代码，但没有完整可见入口。重构前应先决定它们是待恢复功能还是可删除代码。
+XLSX 导入、单月文件列表、无入口的单工时表邮件流程和旧独立 Webview 已删除。材料页多附件邮件保留。仓库 GitLog 将随 SQLite 项目活动模型统一改造。
 
 ### 16.7 主流程测试覆盖不足
 
@@ -536,7 +512,7 @@ XLSX 导入、单月文件列表、部分邮件流程、仓库 GitLog 等已有�
 ## 17. 建议的下一轮讨论顺序
 
 1. 确认三大主 Tab 是否仍是目标信息架构；
-2. 决定不可达功能的保留、恢复或删除；
+2. 统一日报、项目活动和 AI 对话的数据归属模型；
 3. 明确日报、Git 证据、AILog 和月度材料的数据边界；
 4. 定义类型化 Webview 消息协议；
 5. 将 `App.tsx` 按页面和流程拆分；

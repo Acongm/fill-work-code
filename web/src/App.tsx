@@ -184,15 +184,12 @@ export const App: React.FC = () => {
   const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
   const [summaryMonth, setSummaryMonth] = useState(new Date().getMonth() + 1);
   const [monthlyData, setMonthlyData] = useState<MonthlyData | null>(null);
-  const [importPreview, setImportPreview] = useState<{ source: string; items: { date: string; completed: string[]; exists: boolean }[] } | null>(null);
-  const [importSelection, setImportSelection] = useState<Record<string, boolean>>({});
   const [materials, setMaterials] = useState<{ month: string; files: { name: string; path: string; size: number; selected: boolean }[] }[]>([]);
   const [filterDailyJson, setFilterDailyJson] = useState(true);
   const [repositoryOptions, setRepositoryOptions] = useState<string[]>([]);
 
   // 输入框
   const [completedInput, setCompletedInput] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
   const [gitlogInput, setGitlogInput] = useState('');
   const [ailogInput, setAilogInput] = useState('');
   const [gitCommitInput, setGitCommitInput] = useState('');
@@ -347,19 +344,6 @@ export const App: React.FC = () => {
             month: item.month,
             files: (item.files || []).map((f: any) => ({ ...f, selected: true }))
           })));
-          break;
-        case 'importPreview':
-          setImportPreview({ source: msg.source, items: msg.items || [] });
-          setImportSelection(Object.fromEntries((msg.items || []).map((item: any) => [item.date, !item.exists])));
-          notify(`✅ 已解析导入文件: ${msg.source}`);
-          break;
-        case 'importResult':
-          notify(`✅ 导入完成: ${msg.imported} 条，跳过 ${msg.skipped} 条`);
-          setImportPreview(null);
-          setImportSelection({});
-          if (tabRef.current === 'summary') {
-            loadMonthRef.current();
-          }
           break;
         case 'fullConfigUpdate':
           setConfig(msg.config);
@@ -726,15 +710,6 @@ export const App: React.FC = () => {
     vscode.postMessage({ command: 'generateTimesheetFull', year: summaryYear, month: summaryMonth });
   };
 
-  const selectXlsxImport = () => {
-    vscode.postMessage({ command: 'selectXlsxImport', year: summaryYear, month: summaryMonth });
-  };
-
-  const confirmImport = () => {
-    const dates = Object.keys(importSelection).filter((d) => importSelection[d]);
-    vscode.postMessage({ command: 'confirmImport', year: summaryYear, month: summaryMonth, dates });
-  };
-
   const generateAiAll = () => {
     if (aiLoading) {
       return;
@@ -762,7 +737,6 @@ export const App: React.FC = () => {
     setShowPanelSettings(true);
     vscode.postMessage({ command: 'getPluginSettings' });
   };
-  const refreshConfig = () => vscode.postMessage({ command: 'getFullConfig' });
 
   const savePluginSettings = (apiKey: string, emailPassword: string) => {
     if (!pluginSettings) {
@@ -1099,50 +1073,6 @@ export const App: React.FC = () => {
           刷新
         </button>
       </div>
-
-      {importPreview && (
-        <div style={{ ...S.section, marginBottom: '8px' }}>
-          <div style={{ ...S.sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>📥 导入预览 ({importPreview.source})</span>
-            <button
-              type="button"
-              style={S.btnSm}
-              onClick={() => {
-                const all: Record<string, boolean> = {};
-                for (const item of importPreview.items) {
-                  all[item.date] = true;
-                }
-                setImportSelection(all);
-              }}
-            >
-              全选
-            </button>
-          </div>
-          <div style={{ maxHeight: '120px', overflowY: 'auto', fontSize: '10px' }}>
-            {importPreview.items.map(item => (
-              <label key={item.date} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', marginBottom: '4px' }}>
-                <input
-                  type="checkbox"
-                  checked={!!importSelection[item.date]}
-                  onChange={(e) => {
-                    setImportSelection(prev => ({ ...prev, [item.date]: e.target.checked }));
-                  }}
-                />
-                <div>
-                  <strong>{item.date}</strong> {item.exists ? '(已存在)' : ''}
-                  <div style={{ color: 'var(--vscode-descriptionForeground)' }}>
-                    {(item.completed || []).join(' | ') || '(无内容)'}
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-            <button style={S.btnSm} onClick={confirmImport}>确认导入</button>
-            <button style={S.btnSm} onClick={() => setImportPreview(null)}>取消</button>
-          </div>
-        </div>
-      )}
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <div style={{ ...S.section, height: '100%', marginBottom: 0, display: 'flex', flexDirection: 'column' }}>
