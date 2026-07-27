@@ -26,6 +26,8 @@ import {
 } from '@host-utils/utils/fillAnchor';
 import type { SecretMeta } from '../../shared/views/SecretField';
 import { vscode } from '../../shared/utils/vscodeApi';
+import { GeneratedFieldList } from '../../daily/views/GeneratedFieldList';
+import { appendUniqueCompleted } from '@host-utils/utils/completedSync';
 interface DailyLog {
   date: string;
   completed: string[];
@@ -73,7 +75,7 @@ interface AppConfig {
 }
 
 type TabType = 'today' | 'summary' | 'materials';
-type EditableArrayField = 'completed' | 'plan' | 'blockers' | 'gitlog' | 'ailog' | 'gitCommit' | 'origin_url';
+type EditableArrayField = 'completed' | 'plan' | 'blockers';
 
 interface WebviewPersistedState {
   tab?: TabType;
@@ -190,12 +192,8 @@ export const App: React.FC = () => {
 
   // 输入框
   const [completedInput, setCompletedInput] = useState('');
-  const [gitlogInput, setGitlogInput] = useState('');
-  const [ailogInput, setAilogInput] = useState('');
-  const [gitCommitInput, setGitCommitInput] = useState('');
   const [planInput, setPlanInput] = useState('');
   const [blockerInput, setBlockerInput] = useState('');
-  const [originUrlInput, setOriginUrlInput] = useState('');
   const [fillReview, setFillReview] = useState<FillPreview | null>(null);
   const [showPanelSettings, setShowPanelSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -765,13 +763,10 @@ export const App: React.FC = () => {
 
 
   // ============ 渲染列表项 ============
-  const renderItems = (type: Exclude<EditableArrayField, 'origin_url'>, items: string[], placeholder: string, input: string, setInput: (v: string) => void) => (
+  const renderItems = (type: EditableArrayField, items: string[], placeholder: string, input: string, setInput: (v: string) => void) => (
     <div style={S.section}>
       <div style={S.sectionTitle}>
         {type === 'completed' && '✅ 今日完成'}
-        {type === 'gitlog' && '🧾 GitLog'}
-        {type === 'ailog' && '🤖 AILog'}
-        {type === 'gitCommit' && '📝 GitCommit'}
         {type === 'plan' && '📝 明日计划'}
         {type === 'blockers' && '⚠️ 阻碍/问题'}
       </div>
@@ -817,52 +812,15 @@ export const App: React.FC = () => {
     </div>
   );
 
-  const renderOriginUrlItems = () => (
-    <div style={S.section}>
-      <div style={S.sectionTitle}>🔗 相关仓库</div>
-      <div style={S.itemList}>
-        {(log.origin_url || []).length === 0 ? (
-          <div style={S.empty}>暂无记录</div>
-        ) : (log.origin_url || []).map((item, idx) => (
-          <div key={item} style={S.item}>
-            {editIdx?.type === 'origin_url' && editIdx?.idx === idx ? (
-              <>
-                <input
-                  style={S.itemInput}
-                  value={editVal}
-                  onChange={e => setEditVal(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { saveEdit(); } else if (e.key === 'Escape') { cancelEdit(); } }}
-                  autoFocus
-                />
-                <button style={S.iconBtn} onClick={saveEdit} title="保存">✓</button>
-                <button style={S.iconBtn} onClick={cancelEdit} title="取消">✕</button>
-              </>
-            ) : (
-              <>
-                <span style={S.itemText}>{item}</span>
-                <button style={S.iconBtn} onClick={() => startEdit('origin_url', idx, item)} title="编辑">✎</button>
-                <button style={S.delBtn} onClick={() => removeItem('origin_url', idx)} title="删除">✕</button>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-      <div style={S.addRow}>
-        <input
-          list="origin-url-options"
-          style={S.input}
-          value={originUrlInput}
-          onChange={e => setOriginUrlInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { addItem('origin_url', originUrlInput, setOriginUrlInput); } }}
-          placeholder="选择或输入仓库 origin_url"
-        />
-        <datalist id="origin-url-options">
-          {repositoryOptions.map(option => <option key={option} value={option} />)}
-        </datalist>
-        <button style={S.btn} onClick={() => addItem('origin_url', originUrlInput, setOriginUrlInput)}>添加</button>
-      </div>
-    </div>
-  );
+  const syncToCompleted = (items: string[], label: string) => {
+    if (!window.confirm(`将 ${label} 内容去重追加到“今日完成”？`)) {
+      return;
+    }
+    updateLog((prev) => ({
+      ...prev,
+      completed: appendUniqueCompleted(prev.completed, items),
+    }));
+  };
 
   const showDailyOptionalField = (
     field: 'gitlog' | 'gitCommit' | 'plan' | 'blockers' | 'notes',
@@ -996,10 +954,44 @@ export const App: React.FC = () => {
       ) : (
         <>
           {renderItems('completed', log.completed, '输入完成的任务...', completedInput, setCompletedInput)}
-          {showDailyOptionalField('gitlog') && renderItems('gitlog', log.gitlog || [], '输入 GitLog...', gitlogInput, setGitlogInput)}
-          {renderItems('ailog', log.ailog || [], '输入 AILog...', ailogInput, setAilogInput)}
-          {showDailyOptionalField('gitCommit') && renderItems('gitCommit', log.gitCommit || [], '输入 GitCommit...', gitCommitInput, setGitCommitInput)}
-          {renderOriginUrlItems()}
+          <div className="generated-fields-toolbar">
+            <span>程序生成字段</span>
+            <button
+              type="button"
+              className="btn secondary btn-sm"
+              onClick={() =>
+                vscode.postMessage({
+                  command: 'syncGeneratedJson',
+                  date: log.date,
+                  groups: ['git', 'ai'],
+                })
+              }
+            >
+              同步 JSON
+            </button>
+          </div>
+          {showDailyOptionalField('gitlog') && (
+            <GeneratedFieldList
+              label="🧾 GitLog"
+              items={log.gitlog || []}
+              onSyncToCompleted={syncToCompleted}
+            />
+          )}
+          <GeneratedFieldList
+            label="🤖 AILog"
+            items={log.ailog || []}
+            onSyncToCompleted={syncToCompleted}
+          />
+          {showDailyOptionalField('gitCommit') && (
+            <GeneratedFieldList
+              label="📝 GitCommit"
+              items={log.gitCommit || []}
+            />
+          )}
+          <GeneratedFieldList
+            label="🔗 相关仓库"
+            items={log.origin_url || []}
+          />
           {showDailyOptionalField('plan') && renderItems('plan', log.plan, '输入明日计划...', planInput, setPlanInput)}
           {showDailyOptionalField('blockers') && renderItems('blockers', log.blockers, '输入阻碍或问题...', blockerInput, setBlockerInput)}
           {showDailyOptionalField('notes') && (

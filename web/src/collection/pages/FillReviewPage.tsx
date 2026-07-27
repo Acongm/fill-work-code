@@ -2,11 +2,6 @@ import * as React from 'react';
 import { OverlayHeader } from '../../shared/views/OverlayHeader';
 import { EditableItemList } from '../../shared/views/EditableItemList';
 import {
-  CommitItem,
-  parseGitCommitLine,
-  syncGitlogWithCommits,
-} from '../views/CommitItem';
-import {
   collectRequestFromPreview,
   formatFillAnchorLabel,
   resolveCustomRange,
@@ -48,17 +43,6 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
     onChange({ ...preview, days });
   };
 
-  const toggleCommit = (dayIndex: number, line: string, checked: boolean) => {
-    if (checked) {
-      return;
-    }
-    const day = preview.days[dayIndex];
-    const selected = new Set(day.gitCommit.map((entry) => entry.trim()));
-    selected.delete(line.trim());
-    const synced = syncGitlogWithCommits(day.gitlog, day.gitCommit, selected);
-    updateDay(dayIndex, synced);
-  };
-
   const scopeLabel =
     preview.scope === 'workWeek'
       ? '本周'
@@ -90,8 +74,8 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
       <div className="overlay-body fill-review-body">
         <p className="fill-review-note">
           {isGitStep
-            ? '确认 Git 采集结果后写入 GitLog、GitCommit 与相关仓库。可勾选 commit 与按天决定是否写入。'
-            : '确认 AI 润色结果后写入 AILog。基于已有 Git 采集数据润色，不会重复执行脚本采集。'}
+            ? '确认 SQLite 中的 Git 采集结果后同步 JSON。生成字段只读，可按天决定是否写入。'
+            : '确认 AI 润色结果后写入 SQLite 并同步只读 AILog，不会修改今日完成。'}
         </p>
         {preview.error && <div className="warning">{preview.error}</div>}
         {preview.days.map((day, index) => (
@@ -112,39 +96,18 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
             {isGitStep && (
               <>
                 <EditableItemList
-                  label="今日完成（可选，写入 completed）"
-                  hint="手动维护的完成项，会随 Git 字段一并保存"
-                  items={day.completed}
-                  onChange={(completed) => updateDay(index, { completed })}
-                />
-                {day.gitCommit.length > 0 && (
-                  <div className="commit-picker">
-                    <div className="editable-list-label">Commit 勾选</div>
-                    <p className="setting-hint">取消勾选将从 GitCommit / GitLog 中移除</p>
-                    {day.gitCommit.map((line) => {
-                      const parsed = parseGitCommitLine(line);
-                      return (
-                        <CommitItem
-                          key={line}
-                          commit={parsed}
-                          checked
-                          onChange={(checked) => toggleCommit(index, line, checked)}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-                <EditableItemList
-                  label="GitLog（整理后，写入 gitlog）"
-                  hint="按仓库合并的 commit 摘要"
+                  label="GitLog（只读）"
+                  hint="由 SQLite 中的仓库与 Commit 事实生成"
                   items={day.gitlog}
-                  onChange={(gitlog) => updateDay(index, { gitlog })}
+                  readOnly
+                  onChange={() => {}}
                 />
                 <EditableItemList
-                  label="GitCommit（原始，写入 gitCommit）"
-                  hint="每条对应一次 commit，格式：短SHA + 标题"
+                  label="GitCommit（只读）"
+                  hint="每条对应 SQLite 中的一次 Commit"
                   items={day.gitCommit}
-                  onChange={(gitCommit) => updateDay(index, { gitCommit })}
+                  readOnly
+                  onChange={() => {}}
                 />
                 <EditableItemList
                   label="相关仓库"
@@ -157,10 +120,11 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
             )}
             {isAiStep && (
               <EditableItemList
-                label="AILog 候选"
-                hint="英文前缀（项目/项目-模块）+ 中文事项，确认后写入 ailog"
+                label="AILog 候选（只读）"
+                hint="确认后先写入 SQLite，再同步 JSON"
                 items={day.ailogDraft}
-                onChange={(ailogDraft) => updateDay(index, { ailogDraft })}
+                readOnly
+                onChange={() => {}}
               />
             )}
             {day.warnings.length > 0 && (

@@ -863,3 +863,44 @@ body {
 .commit-item code {
   font-size: 10px;
 }
+
+.generated-fields-toolbar,
+.generated-field__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.generated-fields-toolbar {
+  margin: 10px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.generated-field {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editor-background);
+}
+
+.generated-field__header strong {
+  display: block;
+  font-size: 11px;
+}
+
+.generated-field__source,
+.generated-field__empty {
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+}
+
+.generated-field__list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
