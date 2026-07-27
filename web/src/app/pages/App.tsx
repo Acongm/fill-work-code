@@ -28,6 +28,15 @@ import type { SecretMeta } from '../../shared/views/SecretField';
 import { vscode } from '../../shared/utils/vscodeApi';
 import { GeneratedFieldList } from '../../daily/views/GeneratedFieldList';
 import { appendUniqueCompleted } from '@host-utils/utils/completedSync';
+import {
+  ProjectAssignmentSelect,
+  UserFieldList,
+} from '../../daily/views/UserFieldList';
+import type { DailyProjectLink } from '@host-utils/types/dailyLog';
+import {
+  reconcileProjectLinks,
+  setProjectLink,
+} from '@host-utils/utils/projectLinks';
 interface DailyLog {
   date: string;
   completed: string[];
@@ -38,6 +47,7 @@ interface DailyLog {
   ailog?: string[];
   gitCommit?: string[];
   origin_url?: string[];
+  projectLinks?: DailyProjectLink[];
 }
 
 interface MonthlyData {
@@ -75,7 +85,6 @@ interface AppConfig {
 }
 
 type TabType = 'today' | 'summary' | 'materials';
-type EditableArrayField = 'completed' | 'plan' | 'blockers';
 
 interface WebviewPersistedState {
   tab?: TabType;
@@ -179,8 +188,6 @@ export const App: React.FC = () => {
   const [timesheetLoading, setTimesheetLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [editIdx, setEditIdx] = useState<{ type: string; idx: number } | null>(null);
-  const [editVal, setEditVal] = useState('');
 
   // 汇总页状态
   const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
@@ -190,10 +197,6 @@ export const App: React.FC = () => {
   const [filterDailyJson, setFilterDailyJson] = useState(true);
   const [repositoryOptions, setRepositoryOptions] = useState<string[]>([]);
 
-  // 输入框
-  const [completedInput, setCompletedInput] = useState('');
-  const [planInput, setPlanInput] = useState('');
-  const [blockerInput, setBlockerInput] = useState('');
   const [fillReview, setFillReview] = useState<FillPreview | null>(null);
   const [showPanelSettings, setShowPanelSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -289,7 +292,6 @@ export const App: React.FC = () => {
   // 加载日期
   const loadDate = useCallback((dateStr: string) => {
     setLoading(true);
-    setEditIdx(null);
     vscode.postMessage({ command: 'loadDate', date: dateStr });
     vscode.postMessage({ command: 'loadRepositoryOptions', month: dateStr.slice(0, 7) });
     vscode.postMessage({ command: 'updateDailyPreview', date: dateStr });
@@ -465,49 +467,6 @@ export const App: React.FC = () => {
   const updateLog = useCallback((fn: (prev: DailyLog) => DailyLog) => {
     setLog(prev => { setDirty(true); return fn(prev); });
   }, []);
-
-  // 添加项目
-  const addItem = (type: EditableArrayField, val: string, setter: (v: string) => void) => {
-    if (val.trim()) {
-      const nextValue = val.trim();
-      updateLog(prev => {
-        const current = prev[type] || [];
-        if (current.includes(nextValue)) {
-          return prev;
-        }
-        return { ...prev, [type]: [...current, nextValue] };
-      });
-      setter('');
-    }
-  };
-
-  // 删除项目
-  const removeItem = (type: EditableArrayField, idx: number) => {
-    updateLog(prev => ({ ...prev, [type]: (prev[type] || []).filter((_, i) => i !== idx) }));
-  };
-
-  // 编辑项目
-  const startEdit = (type: string, idx: number, val: string) => {
-    setEditIdx({ type, idx });
-    setEditVal(val);
-  };
-
-  const saveEdit = () => {
-    if (editIdx && editVal.trim()) {
-      const { type, idx } = editIdx;
-      updateLog(prev => ({
-        ...prev,
-        [type]: (prev[type as EditableArrayField] || []).map((v, i) => i === idx ? editVal.trim() : v)
-      }));
-    }
-    setEditIdx(null);
-    setEditVal('');
-  };
-
-  const cancelEdit = () => {
-    setEditIdx(null);
-    setEditVal('');
-  };
 
   const save = useCallback(() => {
     vscode.postMessage({ command: 'save', log });
@@ -762,55 +721,13 @@ export const App: React.FC = () => {
   };
 
 
-  // ============ 渲染列表项 ============
-  const renderItems = (type: EditableArrayField, items: string[], placeholder: string, input: string, setInput: (v: string) => void) => (
-    <div style={S.section}>
-      <div style={S.sectionTitle}>
-        {type === 'completed' && '✅ 今日完成'}
-        {type === 'plan' && '📝 明日计划'}
-        {type === 'blockers' && '⚠️ 阻碍/问题'}
-      </div>
-      <div style={S.itemList}>
-        {items.length === 0 ? (
-          <div style={S.empty}>暂无记录</div>
-        ) : items.map((item, idx) => (
-          <div key={idx} style={S.item}>
-            {editIdx?.type === type && editIdx?.idx === idx ? (
-              <>
-                <textarea
-                  style={{ ...S.itemInput, minHeight: '60px', resize: 'vertical' }}
-                  value={editVal}
-                  onChange={e => setEditVal(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { saveEdit(); } else if (e.key === 'Escape') { cancelEdit(); } }}
-                  autoFocus
-                  rows={3}
-                />
-                <button style={S.iconBtn} onClick={saveEdit} title="保存">✓</button>
-                <button style={S.iconBtn} onClick={cancelEdit} title="取消">✕</button>
-              </>
-            ) : (
-              <>
-                <span style={S.itemText}>{item}</span>
-                <button style={S.iconBtn} onClick={() => startEdit(type, idx, item)} title="编辑">✎</button>
-                <button style={S.delBtn} onClick={() => removeItem(type, idx)} title="删除">✕</button>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-      <div style={S.addRow}>
-        <textarea
-          style={{ ...S.input, minHeight: '32px', resize: 'vertical' }}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { addItem(type, input, setInput); } }}
-          placeholder={`${placeholder} (Ctrl+Enter 添加)`}
-          rows={1}
-        />
-        <button style={S.btn} onClick={() => addItem(type, input, setInput)}>添加</button>
-      </div>
-    </div>
-  );
+  const updateUserField = (
+    field: 'completed' | 'plan' | 'blockers',
+    items: string[],
+    projectLinks: DailyProjectLink[],
+  ) => {
+    updateLog((prev) => ({ ...prev, [field]: items, projectLinks }));
+  };
 
   const syncToCompleted = (items: string[], label: string) => {
     if (!window.confirm(`将 ${label} 内容去重追加到“今日完成”？`)) {
@@ -818,7 +735,18 @@ export const App: React.FC = () => {
     }
     updateLog((prev) => ({
       ...prev,
-      completed: appendUniqueCompleted(prev.completed, items),
+      ...(() => {
+        const completed = appendUniqueCompleted(prev.completed, items);
+        return {
+          completed,
+          projectLinks: reconcileProjectLinks(
+            'completed',
+            prev.completed,
+            completed,
+            prev.projectLinks || [],
+          ),
+        };
+      })(),
     }));
   };
 
@@ -953,7 +881,17 @@ export const App: React.FC = () => {
         <div style={S.empty}>加载中...</div>
       ) : (
         <>
-          {renderItems('completed', log.completed, '输入完成的任务...', completedInput, setCompletedInput)}
+          <UserFieldList
+            field="completed"
+            label="✅ 今日完成"
+            placeholder="输入完成的任务..."
+            items={log.completed}
+            projectLinks={log.projectLinks || []}
+            repositoryOptions={repositoryOptions}
+            onChange={(items, links) =>
+              updateUserField('completed', items, links)
+            }
+          />
           <div className="generated-fields-toolbar">
             <span>程序生成字段</span>
             <button
@@ -992,17 +930,78 @@ export const App: React.FC = () => {
             label="🔗 相关仓库"
             items={log.origin_url || []}
           />
-          {showDailyOptionalField('plan') && renderItems('plan', log.plan, '输入明日计划...', planInput, setPlanInput)}
-          {showDailyOptionalField('blockers') && renderItems('blockers', log.blockers, '输入阻碍或问题...', blockerInput, setBlockerInput)}
+          {showDailyOptionalField('plan') && (
+            <UserFieldList
+              field="plan"
+              label="📝 明日计划"
+              placeholder="输入明日计划..."
+              items={log.plan}
+              projectLinks={log.projectLinks || []}
+              repositoryOptions={repositoryOptions}
+              onChange={(items, links) =>
+                updateUserField('plan', items, links)
+              }
+            />
+          )}
+          {showDailyOptionalField('blockers') && (
+            <UserFieldList
+              field="blockers"
+              label="⚠️ 阻碍/问题"
+              placeholder="输入阻碍或问题..."
+              items={log.blockers}
+              projectLinks={log.projectLinks || []}
+              repositoryOptions={repositoryOptions}
+              onChange={(items, links) =>
+                updateUserField('blockers', items, links)
+              }
+            />
+          )}
           {showDailyOptionalField('notes') && (
           <div style={S.section}>
             <div style={S.sectionTitle}>📌 备注</div>
             <textarea
               style={S.textarea}
               value={log.notes}
-              onChange={e => updateLog(prev => ({ ...prev, notes: e.target.value }))}
+              onChange={(event) =>
+                updateLog((prev) => {
+                  const notes = event.target.value;
+                  return {
+                    ...prev,
+                    notes,
+                    projectLinks: reconcileProjectLinks(
+                      'notes',
+                      prev.notes.trim() ? [prev.notes.trim()] : [],
+                      notes.trim() ? [notes.trim()] : [],
+                      prev.projectLinks || [],
+                    ),
+                  };
+                })
+              }
               placeholder="其他备注..."
             />
+            {log.notes.trim() && (
+              <ProjectAssignmentSelect
+                value={
+                  log.projectLinks?.find(
+                    (link) =>
+                      link.field === 'notes' &&
+                      link.content === log.notes.trim(),
+                  )?.projectOriginUrl ?? null
+                }
+                repositoryOptions={repositoryOptions}
+                onChange={(originUrl) =>
+                  updateLog((prev) => ({
+                    ...prev,
+                    projectLinks: setProjectLink(
+                      prev.projectLinks || [],
+                      'notes',
+                      prev.notes.trim(),
+                      originUrl,
+                    ),
+                  }))
+                }
+              />
+            )}
           </div>
           )}
         </>

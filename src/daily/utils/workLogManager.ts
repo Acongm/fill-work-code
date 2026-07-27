@@ -253,6 +253,23 @@ export class WorkLogManager {
     return { year, month, logs };
   }
 
+  public getAllDailyLogs(): DailyLog[] {
+    if (!fs.existsSync(this.storageDir)) {
+      return [];
+    }
+    return fs
+      .readdirSync(this.storageDir, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isDirectory() && /^\d{4}-\d{2}$/.test(entry.name),
+      )
+      .flatMap((entry) => {
+        const [year, month] = entry.name.split('-').map(Number);
+        return this.getMonthlyLogs(year, month).logs;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   // 获取今天的日志（如果不存在则返回默认值）
   public getTodayLog(): DailyLog {
     const today = new Date();

@@ -38,6 +38,10 @@ suite('Daily JSON source', () => {
         loadMonthlyLogs(manager, 2026, 7).logs.map((log) => log.date),
         ['2026-07-27'],
       );
+      assert.deepStrictEqual(
+        manager.getAllDailyLogs().map((log) => log.date),
+        ['2026-07-27'],
+      );
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

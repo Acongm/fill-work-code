@@ -4,6 +4,8 @@ import type { HostPanelDeps } from '../../app/types/hostDependencies';
 import { getRepositoryOptions } from '../../shared/utils/panelUtils';
 import { ProjectRepository } from '../../database/commands/projectRepository';
 import { loadDailyLog, loadMonthlyLogs } from './loadDailyLog';
+import { syncGeneratedJson } from './syncGeneratedJson';
+import type { ProjectionGroup } from '../../database/commands/projectionRepository';
 
 const emptyLog = (date: string): DailyLog => ({
   date,
@@ -102,4 +104,36 @@ export function handleClearSummaryCache(
   month: number,
 ): void {
   deps.workLogManager.clearMonthSummaryCache(year, month);
+}
+
+export async function handleSyncGeneratedJson(
+  deps: HostPanelDeps,
+  date: string,
+  groups: ProjectionGroup[],
+): Promise<void> {
+  try {
+    const result = await syncGeneratedJson(
+      deps.database,
+      deps.workLogManager,
+      date,
+      groups,
+      (line) => deps.outputChannel.appendLine(line),
+    );
+    const skipped =
+      result.skipped.length > 0
+        ? `；${result.skipped.join('/')} 暂无结构化数据，已保留原 JSON`
+        : '';
+    deps.postToWebview({
+      command: 'fillApplied',
+      message: `✅ 已同步 ${result.projected.join('/') || '0'} 字段${skipped}`,
+      reloadDate: date,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    deps.outputChannel.appendLine(`[JSON] ${date} 手动同步失败：${message}`);
+    deps.postToWebview({
+      command: 'notify',
+      message: `❌ JSON 同步失败：${message}`,
+    });
+  }
 }

@@ -11,6 +11,7 @@ import { DailyItemRepository } from '../src/database/commands/dailyItemRepositor
 import { ProjectionRepository } from '../src/database/commands/projectionRepository';
 import { WorkLogManager } from '../src/daily/utils/workLogManager';
 import { GeneratedDailyProjector } from '../src/daily/commands/generatedDailyProjector';
+import { syncGeneratedJson } from '../src/daily/commands/syncGeneratedJson';
 
 async function createFixture(): Promise<{
   root: string;
@@ -24,6 +25,64 @@ async function createFixture(): Promise<{
 }
 
 suite('GeneratedDailyProjector', () => {
+  test('manual sync skips uncovered groups instead of clearing legacy JSON', async () => {
+    const fixture = await createFixture();
+    try {
+      const projects = new ProjectRepository(fixture.database);
+      await projects.upsertProject({
+        id: 'project-sync',
+        originUrl: 'https://example.com/sync.git',
+        name: 'Sync',
+      });
+      await projects.upsertClone({
+        id: 'clone-sync',
+        projectId: 'project-sync',
+        repoRoot: '/tmp/sync',
+        cloneLabel: 'sync',
+      });
+      await new CollectionRepository(fixture.database).saveFacts(
+        [
+          {
+            id: 'commit-sync',
+            projectId: 'project-sync',
+            cloneId: 'clone-sync',
+            sha: '1234567890',
+            subject: 'sync change',
+            committedAt: '2026-07-27T10:00:00.000Z',
+          },
+        ],
+        [],
+      );
+      fixture.manager.saveDailyLog(new Date(2026, 6, 27, 12), {
+        date: '2026-07-27',
+        completed: [],
+        plan: [],
+        blockers: [],
+        notes: '',
+        gitlog: [],
+        ailog: ['legacy ai must stay'],
+        gitCommit: [],
+        origin_url: [],
+      });
+
+      const result = await syncGeneratedJson(
+        fixture.database,
+        fixture.manager,
+        '2026-07-27',
+        ['git', 'ai'],
+      );
+
+      assert.deepStrictEqual(result.projected, ['git']);
+      assert.deepStrictEqual(result.skipped, ['ai']);
+      const saved = fixture.manager.getDailyLog(new Date(2026, 6, 27, 12));
+      assert.deepStrictEqual(saved?.ailog, ['legacy ai must stay']);
+      assert.deepStrictEqual(saved?.gitCommit, ['12345678 sync change']);
+    } finally {
+      await fixture.database.close();
+      fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
   test('projects Git and AI groups independently', async () => {
     const fixture = await createFixture();
     try {

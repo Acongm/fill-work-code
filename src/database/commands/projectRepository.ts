@@ -313,7 +313,7 @@ export class ProjectRepository {
     );
     const items = this.database.all<DailyItemRow>(
       `SELECT * FROM daily_items
-       WHERE project_id = ?
+       WHERE project_id = ? AND source = 'ai'
        ORDER BY date DESC, sort_order, created_at, id`,
       [projectId],
     );

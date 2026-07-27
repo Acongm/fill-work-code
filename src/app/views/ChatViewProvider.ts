@@ -51,12 +51,15 @@ import {
   handleLoadMonthLogs,
   handleLoadRepositoryOptions,
   handleClearSummaryCache,
+  handleSyncGeneratedJson,
 } from '../../daily/commands/dailyMessages';
 import type { Database } from '../../database/types/database';
 import {
   createWebviewStartupGate,
   type WebviewStartupGate,
 } from '../../shared/utils/webviewMessages';
+import { retryPendingProjections } from '../../daily/commands/syncGeneratedJson';
+import type { ProjectionGroup } from '../../database/commands/projectionRepository';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'daily-work-log.chatView';
@@ -93,7 +96,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.outputChannel = vscode.window.createOutputChannel('Daily Work Log');
     this._context.subscriptions.push(this.outputChannel);
     this.databaseReady.then(
-      () => this.logStartup('SQLite 初始化完成'),
+      async database => {
+        this.logStartup('SQLite 初始化完成');
+        const retried = await retryPendingProjections(
+          database,
+          this.workLogManager,
+          message => this.logStartup(message),
+        );
+        if (retried > 0) {
+          this.logStartup(`已重试 ${retried} 个待处理 JSON 投影`);
+        }
+      },
       error =>
         this.logStartup(
           `SQLite 初始化失败: ${
@@ -212,6 +225,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case 'loadDate':
         await handleLoadDate(deps, data.date);
         break;
+
+      case 'syncGeneratedJson': {
+        const groups = Array.isArray(data.groups)
+          ? data.groups.filter(
+              (group: unknown): group is ProjectionGroup =>
+                group === 'git' || group === 'ai',
+            )
+          : [];
+        await handleSyncGeneratedJson(deps, data.date, groups);
+        break;
+      }
 
       case 'loadMonthLogs':
         await handleLoadMonthLogs(deps, data.year, data.month);

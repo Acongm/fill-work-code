@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { HostPanelDeps } from '../../app/types/hostDependencies';
 import { loadPluginSettings } from '../../settings/commands/settingsMessages';
 import { ProjectRepository } from '../../database/commands/projectRepository';
+import { mergeJsonProjectHistory } from './mergeJsonProjectHistory';
 
 function toLegacyGroup(
   project: ReturnType<ProjectRepository['list']>[number],
@@ -59,7 +60,14 @@ export async function handleGetRepoDetail(
     return;
   }
   const clones = repository.listClones(project.id);
-  const history = await repository.getHistory(project.id, { cloneId });
+  const structuredHistory = await repository.getHistory(project.id, {
+    cloneId,
+  });
+  const history = mergeJsonProjectHistory(
+    structuredHistory,
+    deps.workLogManager.getAllDailyLogs(),
+    project.originUrl,
+  );
   deps.postToWebview({
     command: 'repoDetail',
     group: toLegacyGroup(project, clones),
