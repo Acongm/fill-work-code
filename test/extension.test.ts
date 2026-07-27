@@ -38,6 +38,17 @@ suite('Extension Test Suite', () => {
 		}
 	});
 
+	test('routes project daily log generation through the host', () => {
+		const projectRoot = path.resolve(__dirname, '../..');
+		const provider = fs.readFileSync(
+			path.join(projectRoot, 'src/app/views/ChatViewProvider.ts'),
+			'utf8',
+		);
+
+		assert.match(provider, /case 'generateProjectDailyLogs'/);
+		assert.match(provider, /handleGenerateProjectDailyLogs/);
+	});
+
 	test('all runtime paths share the configured storage root', () => {
 		const paths = resolveRuntimePaths('/tmp/work-logs');
 

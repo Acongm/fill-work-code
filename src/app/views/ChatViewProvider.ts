@@ -29,6 +29,7 @@ import {
   handleOpenRepo,
   handleUpdateRepo,
 } from '../../projects/commands/projectMessages';
+import { handleGenerateProjectDailyLogs } from '../../projects/commands/generateProjectDailyLogs';
 import {
   generateTimesheet,
   sendMaterialsEmail,
@@ -387,6 +388,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
       case 'getRepoDetail':
         await handleGetRepoDetail(deps, data.originUrl, data.cloneId, data.month);
+        break;
+
+      case 'generateProjectDailyLogs':
+        await handleGenerateProjectDailyLogs(
+          deps,
+          String(data.originUrl || ''),
+          Array.isArray(data.dates)
+            ? data.dates.filter(
+                (date: unknown): date is string => typeof date === 'string',
+              )
+            : [],
+        );
         break;
 
       case 'openRepoInVscode':
