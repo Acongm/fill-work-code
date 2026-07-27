@@ -27,6 +27,7 @@ dist/
 # VS Code Extension
 # ================================
 .vscode-test/
+.worktrees/
 
 # ================================
 # Python
