@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -9,14 +10,15 @@ import {
   resolveCustomRange,
   resolveFillDateRange,
 } from '../../shared/utils/fillAnchor';
-import type { FillPreview, FillPreviewDay, FillScope } from '../../shared/types/fillPreview';
+import type { FillPreview, FillPreviewDay } from '../../shared/types/fillPreview';
 import type { DailyLog } from '../../daily/utils/workLogManager';
 import type { PluginSettings } from '../../settings/types/pluginSettings';
+import type { Database } from '../../database/types/database';
 import { resolveAuthorAliasesForCollect } from '../../shared/utils/gitAuthorFilter';
 import { resolveOriginFilters } from '../../shared/utils/originFilter';
 import { parseCommitsTsv } from '../../shared/utils/parseCommitsTsv';
 import { dedupeCommitsBySha } from '../../shared/utils/dedupeCommits';
-import { loadRegistry, getKnownRepoRoots, upsertFromTsv } from '../../shared/utils/repoRegistry';
+import { loadRegistry, getKnownRepoRoots } from '../../shared/utils/repoRegistry';
 import {
   buildFillCacheSearchConfig,
   fillCacheConfigHash,
@@ -30,6 +32,9 @@ import {
   saveGitEvidenceMeta,
 } from '../../shared/utils/commitsTsvStore';
 import { resolveRuntimePaths } from '../../settings/utils/pathUtils';
+import { evidenceTsvToFacts } from './evidenceToFacts';
+import { applyCollection } from '../commands/applyCollection';
+import { CollectionRepository } from '../../database/commands/collectionRepository';
 
 export { resolveFillDateRange, resolveFillDates } from '../../shared/utils/fillAnchor';
 
@@ -89,6 +94,7 @@ export class GitEvidenceService {
     settings: PluginSettings,
     existingLogs: Record<string, DailyLog | null>,
     onLog?: (line: string) => void,
+    database?: Database,
   ): Promise<FillPreview> {
     const dates = resolveCollectDates(request);
     const storageRoot = resolveRuntimePaths(this.storagePath).root;
@@ -96,6 +102,7 @@ export class GitEvidenceService {
     const configHash = fillCacheConfigHash(searchConfig);
     const forceRescan = request.forceRescan ?? false;
     const monthKeys = monthKeysForDates(dates);
+    const compatibilityWarnings: string[] = [];
 
     try {
       for (const monthKey of monthKeys) {
@@ -115,6 +122,18 @@ export class GitEvidenceService {
           onLog?.(
             `[TSV 缓存] ${monthKey} 范围内 ${monthDates.length} 天均已冻结，跳过 Git 扫描`,
           );
+          if (database && existingContent.trim()) {
+            // 冻结跳过扫描时仍把已有 TSV 同步进 SQLite，避免「我的仓库」空窗
+            const warnings = await this.persistEvidenceToSqlite(
+              database,
+              storageRoot,
+              existingContent,
+              undefined,
+              request,
+              onLog,
+            );
+            compatibilityWarnings.push(...warnings);
+          }
           continue;
         }
 
@@ -128,15 +147,31 @@ export class GitEvidenceService {
         const scanRequest = narrowCollectRequestToDates(request, needing);
         await this.runEvidenceScript(monthKey, storageRoot, settings, scanRequest, onLog);
 
-        const incomingContent = fs.readFileSync(commitsPath, 'utf-8');
+        const incomingContent = fs.existsSync(commitsPath)
+          ? fs.readFileSync(commitsPath, 'utf-8')
+          : '';
         const frozenSet =
           !forceRescan && meta.configHash === configHash
             ? new Set(meta.frozenDates)
             : new Set<string>();
         const scanSet = new Set(needing);
         const merged = mergeTsvContent(existingContent, incomingContent, frozenSet, scanSet);
-        fs.writeFileSync(commitsPath, merged, 'utf-8');
-        upsertFromTsv(storageRoot, commitsPath);
+
+        if (database) {
+          // 权威写入：先 SQLite（含冻结合并行），再由 CompatibilityWriter 双写 TSV/registry
+          const warnings = await this.persistEvidenceToSqlite(
+            database,
+            storageRoot,
+            merged,
+            undefined,
+            request,
+            onLog,
+          );
+          compatibilityWarnings.push(...warnings);
+        } else {
+          fs.writeFileSync(commitsPath, merged, 'utf-8');
+          onLog?.(`[兼容] 无数据库实例，仅写入 staging TSV`);
+        }
 
         const updatedMeta = markFrozenDates(meta, needing, configHash);
         saveGitEvidenceMeta(monthDir, updatedMeta);
@@ -161,6 +196,10 @@ export class GitEvidenceService {
       };
     }
 
+    for (const warning of compatibilityWarnings) {
+      onLog?.(`[双写警告] ${warning}`);
+    }
+
     const days = this.buildDaysFromCommits(dates, storageRoot, existingLogs);
 
     return {
@@ -172,6 +211,51 @@ export class GitEvidenceService {
       days,
       collectedAt: new Date().toISOString(),
     };
+  }
+
+  private async persistEvidenceToSqlite(
+    database: Database,
+    storageRoot: string,
+    tsvContent: string,
+    dates: Set<string> | undefined,
+    request: CollectRequest,
+    onLog?: (line: string) => void,
+  ): Promise<string[]> {
+    const collectionRunId = `run:${crypto.randomUUID()}`;
+    const collection = new CollectionRepository(database);
+    await collection.upsertRun({
+      id: collectionRunId,
+      scope: request.scope,
+      anchorDate: request.anchorDate,
+      rangeStart: request.rangeStart ?? null,
+      rangeEnd: request.rangeEnd ?? null,
+      status: 'running',
+    });
+
+    try {
+      const facts = evidenceTsvToFacts(database, tsvContent, {
+        dates,
+        collectionRunId,
+      });
+      onLog?.(
+        `[SQLite] 写入 ${facts.commits.length} 条 commit / ${facts.projectCount} 个项目`,
+      );
+      if (facts.commits.length === 0) {
+        await collection.finishRun(collectionRunId, 'completed');
+        return [];
+      }
+      const { warnings } = await applyCollection(database, storageRoot, {
+        commits: facts.commits,
+        gitlogEntries: facts.gitlogEntries,
+      });
+      await collection.finishRun(collectionRunId, 'completed');
+      onLog?.(`[双写] 已从 SQLite 导出兼容 _commits.tsv / registry.json`);
+      return warnings;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await collection.finishRun(collectionRunId, 'failed', message);
+      throw error;
+    }
   }
 
   private buildDaysFromCommits(

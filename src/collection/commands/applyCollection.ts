@@ -39,5 +39,6 @@ export async function applyCollection(
     const [year, monthNumber] = month.split('-').map(Number);
     warnings.push(...(await writer.exportCommits(year, monthNumber)).warnings);
   }
+  warnings.push(...(await writer.exportRegistry()).warnings);
   return { warnings };
 }

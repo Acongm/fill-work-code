@@ -6,7 +6,10 @@ import { openSqlJsDatabase } from '../src/database/utils/sqlJsDatabase';
 import { migrateSchema } from '../src/database/commands/migrateSchema';
 import { saveDailyItems } from '../src/daily/commands/saveDailyItems';
 import { applyCollection } from '../src/collection/commands/applyCollection';
+import { evidenceTsvToFacts } from '../src/collection/utils/evidenceToFacts';
 import { ProjectRepository } from '../src/database/commands/projectRepository';
+import { listProjects } from '../src/projects/commands/listProjects';
+import { loadRegistry } from '../src/shared/utils/repoRegistry';
 
 suite('Daily and collection', () => {
   test('manual daily item requires project choice or explicit unassigned', async () => {
@@ -78,6 +81,71 @@ suite('Daily and collection', () => {
       const history = await projects.getHistory('project-a');
       assert.strictEqual(history.days[0].commits[0].sha, 'abc1234');
       assert.strictEqual(history.days[0].gitlog[0].content, 'change');
+    } finally {
+      await database.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('evidence TSV persists to SQLite first then dual-writes commits and registry', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-dual-write-'));
+    const database = await openSqlJsDatabase(path.join(root, 'work-log.sqlite'));
+    try {
+      await migrateSchema(database);
+      const tsv = [
+        [
+          '/tmp/fill-work-code',
+          'fill-work-code',
+          'https://github.com/Acongm/fill-work-code.git',
+          'deadbeefcafebabe',
+          '',
+          '2026-07-26',
+          '',
+          'acongm',
+          'feat sqlite dual write',
+          '',
+          '',
+        ].join('\t'),
+        '',
+      ].join('\n');
+
+      const facts = evidenceTsvToFacts(database, tsv, {
+        collectionRunId: 'run:test',
+      });
+      assert.strictEqual(facts.commits.length, 1);
+      assert.strictEqual(facts.projectCount, 1);
+
+      const { warnings } = await applyCollection(database, root, {
+        commits: facts.commits,
+        gitlogEntries: facts.gitlogEntries,
+      });
+      assert.deepStrictEqual(warnings, []);
+
+      const projects = listProjects(database);
+      assert.strictEqual(projects.length, 1);
+      assert.strictEqual(
+        projects[0].originUrl,
+        'https://github.com/Acongm/fill-work-code.git',
+      );
+
+      const history = await new ProjectRepository(database).getHistory(
+        projects[0].id,
+      );
+      assert.strictEqual(history.days[0].commits[0].sha, 'deadbeefcafebabe');
+
+      const commitsPath = path.join(root, '2026-07', '_commits.tsv');
+      assert.ok(fs.existsSync(commitsPath));
+      const exported = fs.readFileSync(commitsPath, 'utf-8');
+      assert.ok(exported.includes('feat sqlite dual write'));
+      assert.ok(exported.includes('deadbeefcafebabe'));
+
+      const registry = loadRegistry(root);
+      assert.strictEqual(registry.repos.length, 1);
+      assert.strictEqual(
+        registry.repos[0].originUrl,
+        'https://github.com/Acongm/fill-work-code.git',
+      );
+      assert.strictEqual(registry.repos[0].repoRoot, '/tmp/fill-work-code');
     } finally {
       await database.close();
       fs.rmSync(root, { recursive: true, force: true });

@@ -16,6 +16,8 @@ import type { FillPreview, FillScope } from '../../shared/types/fillPreview';
 import * as vscode from 'vscode';
 import type { HostPanelDeps } from '../../app/types/hostDependencies';
 import { loadPluginSettings } from '../../settings/commands/settingsMessages';
+import { handleListRepos } from '../../projects/commands/projectMessages';
+import type { PluginSettings } from '../../settings/types/pluginSettings';
 
 function postCollectLog(deps: HostPanelDeps, line: string, runId?: number): void {
   if (runId !== undefined && runId !== deps.state.collectRunId) {
@@ -25,6 +27,31 @@ function postCollectLog(deps: HostPanelDeps, line: string, runId?: number): void
   const formatted = `[${ts}] ${line}`;
   deps.outputChannel.appendLine(formatted);
   deps.postToWebview({ command: 'collectLogAppend', line: formatted });
+}
+
+async function collectGitEvidence(
+  deps: HostPanelDeps,
+  request: CollectRequest,
+  settings: PluginSettings,
+  existingLogs: Record<string, DailyLog | null>,
+  runId: number,
+): Promise<FillPreview> {
+  const preview = await deps.gitEvidenceService.collect(
+    request,
+    settings,
+    existingLogs,
+    (line) => postCollectLog(deps, line, runId),
+    deps.database,
+  );
+  if (!preview.error) {
+    try {
+      await handleListRepos(deps);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      postCollectLog(deps, `[仓库列表] 刷新失败: ${message}`, runId);
+    }
+  }
+  return preview;
 }
 
 export function parseCollectRequest(data: {
@@ -363,11 +390,12 @@ export async function collectGitFill(
         runId,
       );
       try {
-        const fresh = await deps.gitEvidenceService.collect(
+        const fresh = await collectGitEvidence(
+          deps,
           request,
           settings,
           existingLogs,
-          (line) => postCollectLog(deps, line, runId),
+          runId,
         );
         if (runId !== deps.state.collectRunId) {
           return;
@@ -415,11 +443,12 @@ export async function collectGitFill(
   );
 
   try {
-    const preview = await deps.gitEvidenceService.collect(
+    const preview = await collectGitEvidence(
+      deps,
       request,
       settings,
       existingLogs,
-      (line) => postCollectLog(deps, line, runId),
+      runId,
     );
     if (runId !== deps.state.collectRunId) {
       return;
@@ -627,11 +656,12 @@ export async function collectAndPolish(
 
   if (!gitPreview) {
     try {
-      gitPreview = await deps.gitEvidenceService.collect(
+      gitPreview = await collectGitEvidence(
+        deps,
         request,
         settings,
         existingLogs,
-        (line) => postCollectLog(deps, line, runId),
+        runId,
       );
       if (runId !== deps.state.collectRunId) {
         return;
