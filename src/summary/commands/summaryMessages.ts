@@ -7,70 +7,7 @@ import type { HostPanelDeps } from '../../app/types/hostDependencies';
 import { getDisplayName, resolveStoragePath } from '../../shared/utils/panelUtils';
 import { resolveRuntimePaths } from '../../settings/utils/pathUtils';
 import { loadPluginSettings } from '../../settings/commands/settingsMessages';
-
-function parseDailyGitlogMarkdown(filePath: string): Record<string, string[]> {
-  const daily: Record<string, string[]> = {};
-  let currentDate = '';
-  const lines = fs.readFileSync(filePath, 'utf-8').split(/\r?\n/);
-
-  lines.forEach(line => {
-    const trimmed = line.trim();
-    const match = trimmed.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
-    if (match) {
-      currentDate = `${match[1]}-${match[2]}-${match[3]}`;
-      daily[currentDate] = daily[currentDate] || [];
-      return;
-    }
-    if (currentDate && trimmed.startsWith('- ')) {
-      const item = trimmed.slice(2).trim();
-      if (item) {
-        daily[currentDate].push(item);
-      }
-    }
-  });
-
-  return daily;
-}
-
-function mergeGitlogIntoDailyLogs(deps: HostPanelDeps, year: number, month: number): void {
-  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
-  const monthDir = path.join(resolveStoragePath(), monthKey);
-  const gitlogPath = path.join(monthDir, 'gitlog', '工作日报清单.md');
-  if (!fs.existsSync(gitlogPath)) {
-    return;
-  }
-
-  const dailyGitlog = parseDailyGitlogMarkdown(gitlogPath);
-  const existingDates = fs.existsSync(monthDir)
-    ? fs.readdirSync(monthDir)
-      .filter(name => new RegExp(`^${monthKey}-\\d{2}\\.json$`).test(name))
-      .map(name => name.replace(/\.json$/, ''))
-    : [];
-  const dates = [...new Set([...existingDates, ...Object.keys(dailyGitlog)])].sort();
-
-  dates.forEach(date => {
-    const logDate = new Date(date + 'T12:00:00');
-    const existing = deps.workLogManager.getDailyLog(logDate) || {
-      date,
-      completed: [],
-      plan: [],
-      blockers: [],
-      notes: '',
-      gitlog: [],
-      ailog: [],
-      gitCommit: [],
-      origin_url: [],
-    };
-    deps.workLogManager.saveDailyLog(logDate, {
-      ...existing,
-      date,
-      gitlog: dailyGitlog[date] || existing.gitlog || [],
-      ailog: existing.ailog || [],
-      gitCommit: existing.gitCommit || [],
-      origin_url: existing.origin_url || [],
-    });
-  });
-}
+import { loadTimesheetSource } from './loadTimesheetSource';
 
 function thinExcelBorder(): any {
   return {
@@ -157,7 +94,10 @@ export async function generateTimesheet(
     const storagePath = resolveStoragePath();
     const monthDir = resolveRuntimePaths(storagePath).month(year, month);
 
-    mergeGitlogIntoDailyLogs(deps, year, month);
+    const source = loadTimesheetSource(deps.workLogManager, year, month);
+    deps.outputChannel.appendLine(
+      `[工时表] 从日期 JSON 加载 ${source.logs.length} 天数据`,
+    );
 
     const result = await vscode.window.withProgress(
       {
