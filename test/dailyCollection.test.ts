@@ -4,7 +4,6 @@ import * as os from 'os';
 import * as path from 'path';
 import { openSqlJsDatabase } from '../src/database/utils/sqlJsDatabase';
 import { migrateSchema } from '../src/database/commands/migrateSchema';
-import { saveDailyItems } from '../src/daily/commands/saveDailyItems';
 import { applyCollection } from '../src/collection/commands/applyCollection';
 import { evidenceTsvToFacts } from '../src/collection/utils/evidenceToFacts';
 import { ProjectRepository } from '../src/database/commands/projectRepository';
@@ -12,33 +11,6 @@ import { listProjects } from '../src/projects/commands/listProjects';
 import { loadRegistry } from '../src/shared/utils/repoRegistry';
 
 suite('Daily and collection', () => {
-  test('manual daily item requires project choice or explicit unassigned', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'daily-items-'));
-    const database = await openSqlJsDatabase(path.join(root, 'work-log.sqlite'));
-    try {
-      await migrateSchema(database);
-      await assert.rejects(() =>
-        saveDailyItems(database, root, {
-          date: '2026-07-26',
-          items: [
-            {
-              id: 'invalid',
-              kind: 'todo',
-              content: 'task',
-              assignment: 'project',
-              projectId: null,
-              source: 'manual',
-              sortOrder: 0,
-            },
-          ],
-        }),
-      );
-    } finally {
-      await database.close();
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
   test('collected commits retain project links through confirmation', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'collection-items-'));
     const database = await openSqlJsDatabase(path.join(root, 'work-log.sqlite'));

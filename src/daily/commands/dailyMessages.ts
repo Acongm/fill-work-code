@@ -1,12 +1,9 @@
 import * as vscode from 'vscode';
-import * as crypto from 'crypto';
 import type { DailyLog } from '../utils/workLogManager';
 import type { HostPanelDeps } from '../../app/types/hostDependencies';
-import { getRepositoryOptions, resolveStoragePath } from '../../shared/utils/panelUtils';
-import { saveDailyItems } from './saveDailyItems';
-import { loadDailyItems } from './loadDailyItems';
-import type { DailyItemInput } from '../../database/commands/dailyItemRepository';
+import { getRepositoryOptions } from '../../shared/utils/panelUtils';
 import { ProjectRepository } from '../../database/commands/projectRepository';
+import { loadDailyLog, loadMonthlyLogs } from './loadDailyLog';
 
 const emptyLog = (date: string): DailyLog => ({
   date,
@@ -20,83 +17,13 @@ const emptyLog = (date: string): DailyLog => ({
   origin_url: [],
 });
 
-function itemId(date: string, kind: string, index: number, content: string): string {
-  return `manual:${crypto
-    .createHash('sha256')
-    .update(`${date}:${kind}:${index}:${content}`)
-    .digest('hex')
-    .slice(0, 24)}`;
-}
-
-function legacyLogItems(log: DailyLog): DailyItemInput[] {
-  const rows = [
-    ...log.completed.map((content) => ({ kind: 'completed' as const, content })),
-    ...(log.ailog || []).map((content) => ({ kind: 'ailog' as const, content })),
-    ...log.plan.map((content) => ({ kind: 'todo' as const, content })),
-    ...log.blockers.map((content) => ({ kind: 'blocker' as const, content })),
-    ...(log.notes.trim()
-      ? [{ kind: 'note' as const, content: log.notes.trim() }]
-      : []),
-  ];
-  return rows.map((row, index) => ({
-    id: itemId(log.date, row.kind, index, row.content),
-    date: log.date,
-    kind: row.kind,
-    content: row.content,
-    assignment: 'unassigned',
-    projectId: null,
-    source: 'manual',
-    sortOrder: index,
-  }));
-}
-
 export function loadDailyProjection(
   deps: HostPanelDeps,
   date: string,
-): { log: DailyLog; items: ReturnType<typeof loadDailyItems> } {
-  const items = loadDailyItems(deps.database, date);
-  const byKind = (kind: DailyItemInput['kind']) =>
-    items.filter((item) => item.kind === kind).map((item) => item.content);
-  const gitlog = deps.database
-    .all<{ content: string }>(
-      'SELECT content FROM gitlog_entries WHERE date = ? ORDER BY id',
-      [date],
-    )
-    .map((row) => row.content);
-  const commits = deps.database
-    .all<{ subject: string }>(
-      `SELECT subject FROM commits
-       WHERE substr(committed_at, 1, 10) = ?
-       ORDER BY committed_at, id`,
-      [date],
-    )
-    .map((row) => row.subject);
-  const origins = deps.database
-    .all<{ origin_url: string }>(
-      `SELECT DISTINCT p.origin_url FROM projects p
-       WHERE p.id IN (
-         SELECT project_id FROM daily_items
-           WHERE date = ? AND project_id IS NOT NULL
-         UNION SELECT project_id FROM gitlog_entries WHERE date = ?
-         UNION SELECT project_id FROM commits
-           WHERE substr(committed_at, 1, 10) = ?
-       ) ORDER BY p.origin_url`,
-      [date, date, date],
-    )
-    .map((row) => row.origin_url);
+): { log: DailyLog; items: [] } {
   return {
-    items,
-    log: {
-      date,
-      completed: byKind('completed'),
-      plan: byKind('todo'),
-      blockers: byKind('blocker'),
-      notes: byKind('note').join('\n'),
-      gitlog,
-      ailog: byKind('ailog'),
-      gitCommit: commits,
-      origin_url: origins,
-    },
+    items: [],
+    log: loadDailyLog(deps.workLogManager, date),
   };
 }
 
@@ -109,20 +36,13 @@ function repositoryOptions(deps: HostPanelDeps): string[] {
 export async function handleSave(
   deps: HostPanelDeps,
   log: DailyLog,
-  items?: DailyItemInput[],
+  _items?: unknown[],
 ): Promise<void> {
   try {
-    const saveItems = items ? items : legacyLogItems(log);
-    const result = await saveDailyItems(deps.database, resolveStoragePath(), {
-      date: log.date,
-      items: saveItems.map(({ date: _date, ...item }) => item),
-    });
+    await deps.workLogManager.saveUserFields(log.date, log);
     deps.postToWebview({
       command: 'saved',
-      message:
-        result.warnings.length > 0
-          ? `✅ 已保存，兼容文件有 ${result.warnings.length} 个警告`
-          : `✅ ${log.date} 日志已保存`,
+      message: `✅ ${log.date} 日志已保存`,
     });
   } catch (e) {
     vscode.window.showErrorMessage(`保存失败: ${e}`);
@@ -155,22 +75,7 @@ export async function handleLoadMonthLogs(
   month: number,
 ): Promise<void> {
   try {
-    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
-    const dates = deps.database
-      .all<{ date: string }>(
-        `SELECT date FROM daily_items WHERE substr(date, 1, 7) = ?
-         UNION SELECT date FROM gitlog_entries WHERE substr(date, 1, 7) = ?
-         UNION SELECT substr(committed_at, 1, 10) AS date FROM commits
-           WHERE substr(committed_at, 1, 7) = ?
-         ORDER BY date`,
-        [monthKey, monthKey, monthKey],
-      )
-      .map((row) => row.date);
-    const monthlyLogs = {
-      year,
-      month,
-      logs: dates.map((date) => loadDailyProjection(deps, date).log),
-    };
+    const monthlyLogs = loadMonthlyLogs(deps.workLogManager, year, month);
     deps.postToWebview({
       command: 'monthLogsLoaded',
       data: monthlyLogs,
