@@ -36,7 +36,8 @@ SQLite 保存可追溯、可按项目和日期查询的程序采集事实：
 - `ai_messages`：AI 会话消息；
 - `daily_items` 中 `source = 'ai'` 的记录：程序生成的 AILog；
 - `daily_ai_evidence`：AILog 与 AI 会话、消息的来源关联；
-- 新增 JSON 投影状态：记录每个日期是否已同步、失败原因和待重试状态。
+- 新增 JSON 投影状态：按日期和字段组记录是否已同步、失败原因和待重试
+  状态。
 
 SQLite 不再作为用户手动日报字段的运行时主存储。现有
 `daily_items.source IN ('manual', 'migration')` 仅用于一次性兼容迁移，正常
@@ -95,7 +96,9 @@ SQLite 不再作为用户手动日报字段的运行时主存储。现有
 - “同步 JSON”：不运行脚本，从 SQLite 重新投影选定日期；
 - “重新 AI 润色”：更新 SQLite 中的 AILog 及证据关联后再投影 JSON。
 
-未知 JSON 字段必须原样保留，投影器只能修改上述白名单字段。
+未知 JSON 字段必须原样保留，投影器只能修改上述白名单字段。Git 操作只投影
+`gitlog`、`gitCommit`、`origin_url`，AI 操作只投影 `ailog`；两类操作不能
+借机清空另一类程序字段。
 
 ## 3. 读取规则
 
@@ -137,9 +140,9 @@ XLSX 生成前不得再从 Markdown、TSV 或 SQLite 反向合并日报。生成
 运行脚本
   → 解析并校验 staging 结果
   → SQLite 事务写入项目、仓库、Commit、GitLog、采集批次
-  → 标记目标日期 JSON 投影待处理
-  → 从 SQLite 查询目标日期的生成字段
-  → 原子覆盖 JSON 白名单字段
+  → 标记目标日期 Git 字段组投影待处理
+  → 从 SQLite 查询目标日期的 Git 生成字段
+  → 原子覆盖 JSON 的 Git 白名单字段
   → 标记投影成功
   → 页面重新读取 JSON
 ```
@@ -164,7 +167,7 @@ Codex、Cursor、Qoder 脚本先把会话和消息写入 SQLite。AILog 生成�
 
 1. 在同一业务操作中替换目标日期的 AI 生成记录；
 2. 写入 `daily_ai_evidence` 来源关联；
-3. 标记 JSON 投影待处理；
+3. 标记 JSON 的 AI 字段组投影待处理；
 4. 仅覆盖 JSON 的 `ailog`；
 5. 页面重新读取 JSON。
 
@@ -198,7 +201,12 @@ interface GeneratedDailyFields {
   ailog: string[];
 }
 
-projectGeneratedFields(date): Promise<ProjectionResult>
+type ProjectionGroup = 'git' | 'ai';
+
+projectGeneratedFields(
+  date,
+  groups: ProjectionGroup[],
+): Promise<ProjectionResult>
 retryPendingProjections(): Promise<ProjectionResult[]>
 ```
 
@@ -206,12 +214,13 @@ retryPendingProjections(): Promise<ProjectionResult[]>
 
 - 从 SQLite 查询生成字段；
 - 读取现有 JSON，文件不存在时创建标准空日报；
-- 只替换 `GeneratedDailyFields` 白名单；
+- 只替换本次字段组对应的 `GeneratedDailyFields` 白名单；
 - 保留用户字段、`projectLinks` 和未知字段；
 - 写入唯一临时文件并原子替换目标 JSON；
 - 成功后更新投影状态；
 - 失败时保留原 JSON，记录错误并允许重试；
-- 对同一日期串行执行，防止并发采集互相覆盖。
+- 对同一日期的投影、用户保存和手动同步使用同一把写锁，防止并发
+  read-modify-write 互相覆盖。
 
 `CompatibilityWriter.exportDaily()` 的“从 SQLite 重建整份日报”能力必须删除
 或停止调用。TSV 和仓库注册表兼容导出可以暂时保留，但不能反向成为日报
@@ -254,7 +263,9 @@ retryPendingProjections(): Promise<ProjectionResult[]>
 5. 优先从 `_commits.tsv` 恢复结构化 Git 事实；
 6. 只有 JSON、没有 TSV 的历史 Git 字段继续展示，但在重新采集前不伪造
    Commit SHA；
-7. 只有存在结构化事实的日期才允许 SQLite 覆盖程序字段；
+7. 只有具备成功采集覆盖记录的日期和字段组才允许 SQLite 覆盖程序字段；
+   一次成功扫描即使结果为空，也可以清空该日期旧的 Git 字段；Git 扫描
+   不能清空旧 AILog；
 8. 迁移完成后，页面立即从 JSON 读取。
 
 迁移必须幂等。任何迁移失败都不得清空或截断现有 JSON。
@@ -290,8 +301,8 @@ web/src/{module}/{pages|commands|views|utils|layout|hooks|types}/
 ## 9. 失败语义与可观测性
 
 - SQLite 事务失败：不触碰 JSON，采集显示失败；
-- SQLite 成功、JSON 投影失败：采集事实保留，状态标记待重试，页面继续显示
-  原 JSON 并提示同步失败；
+- SQLite 成功、JSON 投影失败：采集事实保留，对应字段组标记待重试，页面
+  继续显示原 JSON 并提示同步失败；
 - JSON 用户保存失败：SQLite 不受影响，页面保留未保存状态；
 - 扩展启动和打开日报时重试待处理投影；
 - Output Channel 记录采集批次、SQLite 行数、投影日期、写入字段和错误；
