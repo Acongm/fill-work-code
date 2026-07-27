@@ -1,10 +1,10 @@
 # 当前页面功能与代码结构说明
 
-> 基线：`main` / `118c5b3`（2026-07-26）
+> 基线：JSON 日报主数据 / SQLite 采集证据重构（2026-07-27）
 >
 > 目的：记录当前用户可见页面、实际可达功能、Webview 与扩展端的交互边界，作为后续功能调整和代码重构的共同基线。
 
-扩展端与 Webview 均采用 `src/{module}/{commands|views|utils|layout|hooks|types}`。当前模块包括 `app`、`daily`、`collection`、`projects`、`summary`、`settings`、`database`、`preview` 和 `shared`。SQLite 文件固定为存储根目录下的 `work-log.sqlite`；旧 JSON、TSV 和仓库注册表只作为自动迁移输入与过渡版本兼容输出。
+扩展端与 Webview 均采用 `src/{module}/{commands|views|utils|layout|hooks|types}`。当前模块包括 `app`、`daily`、`collection`、`projects`、`summary`、`settings`、`database`、`preview` 和 `shared`。SQLite 文件固定为存储根目录下的 `work-log.sqlite`，用于保存按仓库、日期查询的 Commit、GitLog 和 AI 会话证据；日期 JSON 是日报页面、用户编辑、汇总和 XLSX 的主数据。
 
 ## 1. 产品入口与页面层级
 
@@ -72,7 +72,7 @@ Webview 使用 VS Code Webview State 保存以下状态：
 
 ### 3.1 页面目标
 
-按日期查看和编辑日报；从 Git 生成工作证据；使用 AI 生成 AILog；将确认后的数据写入每日 JSON。
+按日期查看和编辑 JSON 日报；Git、Codex、Cursor、Qoder 和 AI 润色结果先结构化写入 SQLite，再同步到每日 JSON 的只读程序字段。
 
 ### 3.2 日期与采集范围
 
@@ -102,20 +102,29 @@ Webview 使用 VS Code Webview State 保存以下状态：
 
 当“日报同步字段显示控制”关闭时，日报编辑页显示全部可选字段；开启后跟随个人中心的字段勾选结果。
 
-数组字段支持新增、编辑和删除：
+用户字段支持新增、编辑和删除：
 
 - 输入后点击“添加”；
 - `Ctrl/Cmd + Enter` 快速添加；
 - 编辑时 `Ctrl/Cmd + Enter` 保存，`Escape` 取消；
 - 重复文本不会再次添加。
 
-“相关仓库”使用当月已知的 `origin_url` 作为下拉建议，也允许手工输入。
+`completed`、`plan`、`blockers` 和 `notes` 的每条记录都需要选择已采集项目或明确选择“未归属”，关联信息保存在 JSON 的 `projectLinks`。
+
+`gitlog`、`gitCommit`、`origin_url` 和 `ailog` 是程序字段，在日报页面只读：
+
+- “重新采集”先更新 SQLite，再覆盖相应 JSON 字段；
+- “同步 JSON”从 SQLite 重试投影，不重新执行脚本；
+- “同步到今日完成”经用户确认后，将 GitLog/AILog 去重追加到 `completed`；
+- Git 同步与 AI 同步按字段组隔离，互不清空。
 
 ### 3.4 保存
 
 - 自动保存开启时：修改后延迟约 800ms 保存；
 - 自动保存关闭时：页面底部显示手动保存按钮；
-- 数据最终由 `WorkLogManager.saveDailyLog()` 写入日期 JSON。
+- 用户保存通过 `WorkLogManager.saveUserFields()` 只更新 JSON 用户字段；
+- 程序字段通过 `GeneratedDailyProjector` 原子覆盖；
+- 同一日期的用户保存与程序投影使用共享写队列，保留未知 JSON 字段。
 
 ### 3.5 Git 与 AI 操作
 
@@ -175,8 +184,7 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 - 标题显示采集步骤、范围和锚点日期；
 - 每天可以单独决定是否写入；
 - 可以维护当日 `completed`；
-- Commit 默认全部选中，取消某条时会同步从 GitCommit 和匹配的 GitLog 中删除；
-- GitLog 和 GitCommit 都可继续编辑、添加或删除；
+- Commit、GitLog 和相关仓库只读展示，不能在确认页制造与 SQLite 不一致的数据；
 - 相关仓库只读展示；
 - 显示按天警告；
 - “确认写入 Git 字段”后写入日报；
@@ -197,10 +205,10 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 ### 6.2 当前功能
 
 - 每天可决定是否写入；
-- AILog 候选可新增、编辑、删除；
+- AILog 候选只读展示；
 - 显示生成警告；
 - 支持“重新 AI 润色”，复用当前内存确认数据；
-- “确认写入 AILog”后合并进日报 JSON；
+- “确认写入 AILog”后先替换 SQLite 中的 AI 生成记录，再投影 JSON；
 - 不直接覆盖 `completed`、GitLog 或 GitCommit。
 
 ### 6.3 主要代码
@@ -506,7 +514,7 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 16.6 已清理的不可达功能
 
-XLSX 导入、单月文件列表、无入口的单工时表邮件流程和旧独立 Webview 已删除。材料页多附件邮件保留。仓库 GitLog 将随 SQLite 项目活动模型统一改造。
+XLSX 导入、单月文件列表、无入口的单工时表邮件流程和旧独立 Webview 已删除。材料页多附件邮件保留。XLSX 生成只读取日期 JSON，不再从 Markdown、TSV 或 SQLite 反向覆盖日报。仓库详情从 SQLite 查询 Commit/GitLog/AI 事实，并合并 JSON 中明确关联到该项目的用户记录。
 
 ### 16.7 主流程测试覆盖不足
 

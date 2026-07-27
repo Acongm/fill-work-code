@@ -76,7 +76,7 @@ suite('Database', () => {
     }
   });
 
-  test('returns project history without unrelated same-day items', async () => {
+  test('returns only project-linked generated items from SQLite history', async () => {
     const fixture = await createTestDatabase();
     const projects = new ProjectRepository(fixture.database);
     const dailyItems = new DailyItemRepository(fixture.database);
@@ -99,7 +99,7 @@ suite('Database', () => {
         content: 'project A item',
         assignment: 'project',
         projectId: 'project-a',
-        source: 'manual',
+        source: 'ai',
         sortOrder: 0,
       });
       await dailyItems.insert({
