@@ -322,33 +322,6 @@ export async function generateAiAll(
   }
 }
 
-function mergeAiLogIntoDailyLogs(deps: HostPanelDeps, aiJsonPath: string): void {
-  if (!fs.existsSync(aiJsonPath)) {
-    return;
-  }
-  try {
-    const aiOutput = JSON.parse(fs.readFileSync(aiJsonPath, 'utf-8'));
-    Object.entries(aiOutput.daily || {}).forEach(([date, value]) => {
-      const daily = value as any;
-      const polished = daily.polished || {};
-      const ailog = Array.isArray(polished.completed) ? polished.completed : [];
-      const logDate = new Date(date + 'T12:00:00');
-      const existing = deps.workLogManager.getDailyLog(logDate);
-      if (!existing) {
-        return;
-      }
-      deps.workLogManager.saveDailyLog(logDate, {
-        ...existing,
-        ailog,
-        gitlog: existing.gitlog || [],
-        origin_url: existing.origin_url || [],
-      });
-    });
-  } catch (e) {
-    console.warn('合并 AILog 到每日 JSON 失败:', e);
-  }
-}
-
 export function listMaterials(deps: HostPanelDeps): void {
   const storagePath = resolveStoragePath();
   if (!fs.existsSync(storagePath)) {

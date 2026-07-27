@@ -929,3 +929,33 @@ body {
   border-radius: 3px;
   font-size: 10px;
 }
+
+.daily-page__empty {
+  padding: 8px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  text-align: center;
+}
+
+.daily-notes {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+.daily-notes strong {
+  font-size: 11px;
+}
+
+.daily-notes textarea {
+  min-height: 64px;
+  padding: 6px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 3px;
+  resize: vertical;
+}

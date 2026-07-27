@@ -26,17 +26,13 @@ import {
 } from '@host-utils/utils/fillAnchor';
 import type { SecretMeta } from '../../shared/views/SecretField';
 import { vscode } from '../../shared/utils/vscodeApi';
-import { GeneratedFieldList } from '../../daily/views/GeneratedFieldList';
 import { appendUniqueCompleted } from '@host-utils/utils/completedSync';
-import {
-  ProjectAssignmentSelect,
-  UserFieldList,
-} from '../../daily/views/UserFieldList';
 import type { DailyProjectLink } from '@host-utils/types/dailyLog';
 import {
   reconcileProjectLinks,
   setProjectLink,
 } from '@host-utils/utils/projectLinks';
+import { DailyPage } from '../../daily/pages/DailyPage';
 interface DailyLog {
   date: string;
   completed: string[];
@@ -877,135 +873,48 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      {loading ? (
-        <div style={S.empty}>加载中...</div>
-      ) : (
-        <>
-          <UserFieldList
-            field="completed"
-            label="✅ 今日完成"
-            placeholder="输入完成的任务..."
-            items={log.completed}
-            projectLinks={log.projectLinks || []}
-            repositoryOptions={repositoryOptions}
-            onChange={(items, links) =>
-              updateUserField('completed', items, links)
-            }
-          />
-          <div className="generated-fields-toolbar">
-            <span>程序生成字段</span>
-            <button
-              type="button"
-              className="btn secondary btn-sm"
-              onClick={() =>
-                vscode.postMessage({
-                  command: 'syncGeneratedJson',
-                  date: log.date,
-                  groups: ['git', 'ai'],
-                })
-              }
-            >
-              同步 JSON
-            </button>
-          </div>
-          {showDailyOptionalField('gitlog') && (
-            <GeneratedFieldList
-              label="🧾 GitLog"
-              items={log.gitlog || []}
-              onSyncToCompleted={syncToCompleted}
-            />
-          )}
-          <GeneratedFieldList
-            label="🤖 AILog"
-            items={log.ailog || []}
-            onSyncToCompleted={syncToCompleted}
-          />
-          {showDailyOptionalField('gitCommit') && (
-            <GeneratedFieldList
-              label="📝 GitCommit"
-              items={log.gitCommit || []}
-            />
-          )}
-          <GeneratedFieldList
-            label="🔗 相关仓库"
-            items={log.origin_url || []}
-          />
-          {showDailyOptionalField('plan') && (
-            <UserFieldList
-              field="plan"
-              label="📝 明日计划"
-              placeholder="输入明日计划..."
-              items={log.plan}
-              projectLinks={log.projectLinks || []}
-              repositoryOptions={repositoryOptions}
-              onChange={(items, links) =>
-                updateUserField('plan', items, links)
-              }
-            />
-          )}
-          {showDailyOptionalField('blockers') && (
-            <UserFieldList
-              field="blockers"
-              label="⚠️ 阻碍/问题"
-              placeholder="输入阻碍或问题..."
-              items={log.blockers}
-              projectLinks={log.projectLinks || []}
-              repositoryOptions={repositoryOptions}
-              onChange={(items, links) =>
-                updateUserField('blockers', items, links)
-              }
-            />
-          )}
-          {showDailyOptionalField('notes') && (
-          <div style={S.section}>
-            <div style={S.sectionTitle}>📌 备注</div>
-            <textarea
-              style={S.textarea}
-              value={log.notes}
-              onChange={(event) =>
-                updateLog((prev) => {
-                  const notes = event.target.value;
-                  return {
-                    ...prev,
-                    notes,
-                    projectLinks: reconcileProjectLinks(
-                      'notes',
-                      prev.notes.trim() ? [prev.notes.trim()] : [],
-                      notes.trim() ? [notes.trim()] : [],
-                      prev.projectLinks || [],
-                    ),
-                  };
-                })
-              }
-              placeholder="其他备注..."
-            />
-            {log.notes.trim() && (
-              <ProjectAssignmentSelect
-                value={
-                  log.projectLinks?.find(
-                    (link) =>
-                      link.field === 'notes' &&
-                      link.content === log.notes.trim(),
-                  )?.projectOriginUrl ?? null
-                }
-                repositoryOptions={repositoryOptions}
-                onChange={(originUrl) =>
-                  updateLog((prev) => ({
-                    ...prev,
-                    projectLinks: setProjectLink(
-                      prev.projectLinks || [],
-                      'notes',
-                      prev.notes.trim(),
-                      originUrl,
-                    ),
-                  }))
-                }
-              />
-            )}
-          </div>
-          )}
-        </>
-      )}
+      <DailyPage
+        log={log}
+        loading={loading}
+        repositoryOptions={repositoryOptions}
+        showGitlog={showDailyOptionalField('gitlog')}
+        showGitCommit={showDailyOptionalField('gitCommit')}
+        showPlan={showDailyOptionalField('plan')}
+        showBlockers={showDailyOptionalField('blockers')}
+        showNotes={showDailyOptionalField('notes')}
+        onUserFieldChange={updateUserField}
+        onNotesChange={(notes) =>
+          updateLog((prev) => ({
+            ...prev,
+            notes,
+            projectLinks: reconcileProjectLinks(
+              'notes',
+              prev.notes.trim() ? [prev.notes.trim()] : [],
+              notes.trim() ? [notes.trim()] : [],
+              prev.projectLinks || [],
+            ),
+          }))
+        }
+        onNotesProjectChange={(originUrl) =>
+          updateLog((prev) => ({
+            ...prev,
+            projectLinks: setProjectLink(
+              prev.projectLinks || [],
+              'notes',
+              prev.notes.trim(),
+              originUrl,
+            ),
+          }))
+        }
+        onSyncToCompleted={syncToCompleted}
+        onSyncGeneratedJson={() =>
+          vscode.postMessage({
+            command: 'syncGeneratedJson',
+            date: log.date,
+            groups: ['git', 'ai'],
+          })
+        }
+      />
     </div>
   );
 

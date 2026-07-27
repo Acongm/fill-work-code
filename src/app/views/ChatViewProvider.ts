@@ -95,25 +95,33 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.fillCacheService = new FillCacheService(storagePath);
     this.outputChannel = vscode.window.createOutputChannel('Daily Work Log');
     this._context.subscriptions.push(this.outputChannel);
-    this.databaseReady.then(
-      async database => {
-        this.logStartup('SQLite 初始化完成');
-        const retried = await retryPendingProjections(
-          database,
-          this.workLogManager,
-          message => this.logStartup(message),
-        );
-        if (retried > 0) {
-          this.logStartup(`已重试 ${retried} 个待处理 JSON 投影`);
-        }
-      },
-      error =>
+    this.databaseReady
+      .then(
+        async database => {
+          this.logStartup('SQLite 初始化完成');
+          const retried = await retryPendingProjections(
+            database,
+            this.workLogManager,
+            message => this.logStartup(message),
+          );
+          if (retried > 0) {
+            this.logStartup(`已重试 ${retried} 个待处理 JSON 投影`);
+          }
+        },
+        error =>
+          this.logStartup(
+            `SQLite 初始化失败: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          ),
+      )
+      .catch(error => {
         this.logStartup(
-          `SQLite 初始化失败: ${
+          `待处理 JSON 投影重试失败: ${
             error instanceof Error ? error.message : String(error)
           }`,
-        ),
-    );
+        );
+      });
   }
 
   public postToWebview(message: Record<string, unknown>): void {
@@ -284,7 +292,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'applyFillPreview':
-        await applyFillPreview(deps, data.preview, data.mode);
+        try {
+          await applyFillPreview(deps, data.preview, data.mode);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          deps.outputChannel.appendLine(`[应用采集结果] 失败：${message}`);
+          deps.postToWebview({
+            command: 'notify',
+            message: `❌ 应用失败：${message}`,
+          });
+        }
         break;
 
       case 'discardFillPreview':
