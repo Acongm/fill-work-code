@@ -1,3 +1,10 @@
+export interface DailyProjectLink {
+  field: 'completed' | 'plan' | 'blockers' | 'notes';
+  content: string;
+  assignment: 'project' | 'unassigned';
+  projectOriginUrl: string | null;
+}
+
 export interface DailyLog {
   date: string;
   completed: string[];
@@ -8,6 +15,7 @@ export interface DailyLog {
   ailog?: string[];
   gitCommit?: string[];
   origin_url?: string[];
+  projectLinks?: DailyProjectLink[];
 }
 
 export interface MonthlyLog {
@@ -27,5 +35,6 @@ export function emptyDailyLog(date: string): DailyLog {
     ailog: [],
     gitCommit: [],
     origin_url: [],
+    projectLinks: [],
   };
 }

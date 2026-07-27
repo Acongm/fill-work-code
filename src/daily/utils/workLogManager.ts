@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import type { DailyLog, MonthlyLog } from '../../shared/types/dailyLog';
 import { resolveRuntimePaths } from '../../settings/utils/pathUtils';
 
@@ -7,6 +8,7 @@ export type { DailyLog, MonthlyLog } from '../../shared/types/dailyLog';
 
 export class WorkLogManager {
   private storageDir: string;
+  private readonly dateWriteQueues = new Map<string, Promise<void>>();
 
   constructor(storageDir: string) {
     this.storageDir = resolveRuntimePaths(storageDir).root;
@@ -54,6 +56,11 @@ export class WorkLogManager {
     return path.join(dir, `${dateStr}.json`);
   }
 
+  private getDateFilePathFromString(date: string): string {
+    const [year, month] = date.split('-').map(Number);
+    return path.join(this.getMonthDir(year, month), `${date}.json`);
+  }
+
   private normalizeDailyLog(log: Partial<DailyLog>): DailyLog {
     return {
       date: typeof log.date === 'string' ? log.date : '',
@@ -64,8 +71,134 @@ export class WorkLogManager {
       gitlog: Array.isArray(log.gitlog) ? log.gitlog.filter(Boolean) : [],
       ailog: Array.isArray(log.ailog) ? log.ailog.filter(Boolean) : [],
       gitCommit: Array.isArray(log.gitCommit) ? log.gitCommit.filter(Boolean) : [],
-      origin_url: Array.isArray(log.origin_url) ? log.origin_url.filter(Boolean) : []
+      origin_url: Array.isArray(log.origin_url) ? log.origin_url.filter(Boolean) : [],
+      projectLinks: Array.isArray(log.projectLinks)
+        ? log.projectLinks.filter(
+            (link) =>
+              link &&
+              typeof link.content === 'string' &&
+              (link.assignment === 'project' ||
+                link.assignment === 'unassigned'),
+          )
+        : [],
     };
+  }
+
+  private readRawDailyLog(date: string): Record<string, unknown> {
+    const filePath = this.getDateFilePathFromString(date);
+    if (!fs.existsSync(filePath)) {
+      return this.normalizeDailyLog({ date }) as unknown as Record<
+        string,
+        unknown
+      >;
+    }
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`Invalid daily JSON object: ${filePath}`);
+    }
+    return parsed as Record<string, unknown>;
+  }
+
+  private async writeRawDailyLog(
+    date: string,
+    log: Record<string, unknown>,
+  ): Promise<void> {
+    const filePath = this.getDateFilePathFromString(date);
+    const temporaryPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    await fs.promises.writeFile(
+      temporaryPath,
+      `${JSON.stringify(log, null, 2)}\n`,
+      'utf-8',
+    );
+    await fs.promises.rename(temporaryPath, filePath);
+    const [year, month, day] = date.split('-').map(Number);
+    this.updateMonthSummaryCache(new Date(year, month - 1, day, 12));
+  }
+
+  private enqueueDateWrite(
+    date: string,
+    operation: () => Promise<void>,
+  ): Promise<void> {
+    const previous = this.dateWriteQueues.get(date) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(operation);
+    this.dateWriteQueues.set(date, current);
+    return current.finally(() => {
+      if (this.dateWriteQueues.get(date) === current) {
+        this.dateWriteQueues.delete(date);
+      }
+    });
+  }
+
+  public saveUserFields(date: string, log: DailyLog): Promise<void> {
+    return this.enqueueDateWrite(date, async () => {
+      const existing = this.readRawDailyLog(date);
+      const normalized = this.normalizeDailyLog({ ...log, date });
+      const next: Record<string, unknown> = {
+        ...existing,
+        date,
+        completed: normalized.completed,
+        plan: normalized.plan,
+        blockers: normalized.blockers,
+        notes: normalized.notes,
+      };
+      if (log.projectLinks !== undefined) {
+        next.projectLinks = normalized.projectLinks;
+      }
+      await this.writeRawDailyLog(date, next);
+    });
+  }
+
+  public patchGeneratedFields(
+    date: string,
+    group: 'git',
+    fields: Pick<DailyLog, 'gitlog' | 'gitCommit' | 'origin_url'>,
+  ): Promise<void>;
+  public patchGeneratedFields(
+    date: string,
+    group: 'ai',
+    fields: Pick<DailyLog, 'ailog'>,
+  ): Promise<void>;
+  public patchGeneratedFields(
+    date: string,
+    group: 'git' | 'ai',
+    fields:
+      | Pick<DailyLog, 'gitlog' | 'gitCommit' | 'origin_url'>
+      | Pick<DailyLog, 'ailog'>,
+  ): Promise<void> {
+    return this.enqueueDateWrite(date, async () => {
+      const existing = this.readRawDailyLog(date);
+      let next: Record<string, unknown>;
+      if (group === 'git') {
+        const gitFields = fields as Pick<
+          DailyLog,
+          'gitlog' | 'gitCommit' | 'origin_url'
+        >;
+        next = {
+          ...existing,
+          date,
+          gitlog: Array.isArray(gitFields.gitlog)
+            ? gitFields.gitlog.filter(Boolean)
+            : [],
+          gitCommit: Array.isArray(gitFields.gitCommit)
+            ? gitFields.gitCommit.filter(Boolean)
+            : [],
+          origin_url: Array.isArray(gitFields.origin_url)
+            ? gitFields.origin_url.filter(Boolean)
+            : [],
+        };
+      } else {
+        const aiFields = fields as Pick<DailyLog, 'ailog'>;
+        next = {
+          ...existing,
+          date,
+          ailog: Array.isArray(aiFields.ailog)
+            ? aiFields.ailog.filter(Boolean)
+            : [],
+        };
+      }
+      await this.writeRawDailyLog(date, next);
+    });
   }
 
   // 获取指定日期的日志
