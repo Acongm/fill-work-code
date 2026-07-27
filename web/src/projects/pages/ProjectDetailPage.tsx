@@ -2,34 +2,14 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { OverlayHeader } from '../../shared/views/OverlayHeader';
 import { CloneTagBar } from '../views/CloneTagBar';
+import { ProjectCommitDay } from '../views/ProjectCommitDay';
+import type {
+  ProjectDailyLogsGeneratedMessage,
+  ProjectHistory,
+} from '../types/projectHistory';
 import type { RepoGroup } from '@host-utils/types/repoRegistry';
+import { remainingSelectedDates } from '@host-utils/utils/projectDateSelection';
 import { vscode } from '../../shared/utils/vscodeApi';
-
-interface ProjectHistory {
-  days: Array<{
-    date: string;
-    commits: Array<{
-      id: string;
-      cloneId: string;
-      committedAt: string;
-      sha: string;
-      subject: string;
-    }>;
-    gitlog: Array<{ id: string; content: string }>;
-    items: Array<{
-      id: string;
-      kind: 'completed' | 'ailog' | 'todo' | 'blocker' | 'note';
-      content: string;
-      assignment: 'project' | 'unassigned';
-    }>;
-  }>;
-}
-
-interface LegacyCommit {
-    date?: string;
-    sha: string;
-    subject: string;
-}
 
 interface RepoDetailOverlayProps {
   group: RepoGroup;
@@ -42,7 +22,12 @@ export const RepoDetailOverlay: React.FC<RepoDetailOverlayProps> = ({
 }) => {
   const [activeTag, setActiveTag] = useState('all');
   const [history, setHistory] = useState<ProjectHistory | null>(null);
-  const [showCommits, setShowCommits] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [expandedDates, setExpandedDates] = useState<string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [generationFailures, setGenerationFailures] = useState<
+    Array<{ date: string; message: string }>
+  >([]);
 
   const tags = [
     { id: 'all', label: '全部' },
@@ -55,8 +40,26 @@ export const RepoDetailOverlay: React.FC<RepoDetailOverlayProps> = ({
       if (data.command === 'repoDetail' && data.group?.originUrl === group.originUrl) {
         setHistory(data.history || null);
       }
+      if (
+        data.command === 'projectDailyLogsGenerated' &&
+        data.originUrl === group.originUrl
+      ) {
+        const result = data as ProjectDailyLogsGeneratedMessage;
+        setSelectedDates((current) =>
+          remainingSelectedDates(current, result.generatedDates || []),
+        );
+        setGenerationFailures(result.failures || []);
+        setGenerating(false);
+        vscode.postMessage({
+          command: 'getRepoDetail',
+          originUrl: group.originUrl,
+          cloneId: activeTag === 'all' ? undefined : activeTag,
+        });
+      }
     };
     window.addEventListener('message', handler);
+    setSelectedDates([]);
+    setGenerationFailures([]);
     vscode.postMessage({
       command: 'getRepoDetail',
       originUrl: group.originUrl,
@@ -65,9 +68,36 @@ export const RepoDetailOverlay: React.FC<RepoDetailOverlayProps> = ({
     return () => window.removeEventListener('message', handler);
   }, [group.originUrl, activeTag]);
 
-  const commits = (history?.days || []).flatMap((day) =>
-    day.commits.map((commit) => ({ ...commit, date: day.date })),
-  );
+  const setDateSelected = (date: string, selected: boolean) => {
+    setSelectedDates((current) => {
+      if (selected) {
+        return current.includes(date) ? current : [...current, date].sort();
+      }
+      return current.filter((item) => item !== date);
+    });
+  };
+
+  const setDateExpanded = (date: string, expanded: boolean) => {
+    setExpandedDates((current) => {
+      if (expanded) {
+        return current.includes(date) ? current : [...current, date];
+      }
+      return current.filter((item) => item !== date);
+    });
+  };
+
+  const generateDailyLogs = () => {
+    if (selectedDates.length === 0 || generating) {
+      return;
+    }
+    setGenerating(true);
+    setGenerationFailures([]);
+    vscode.postMessage({
+      command: 'generateProjectDailyLogs',
+      originUrl: group.originUrl,
+      dates: selectedDates,
+    });
+  };
 
   return (
     <section className="page-overlay repo-detail-overlay">
@@ -90,45 +120,44 @@ export const RepoDetailOverlay: React.FC<RepoDetailOverlayProps> = ({
         </div>
         <CloneTagBar tags={tags} activeId={activeTag} onChange={setActiveTag} />
 
-        <section className="repo-activity-section repo-activity-primary">
-          <h4>项目每日记录</h4>
+        <section className="repo-activity-section">
+          <div className="repo-activity-toolbar">
+            <h4>工作日志</h4>
+            <button
+              type="button"
+              className="btn"
+              disabled={generating || selectedDates.length === 0}
+              onClick={generateDailyLogs}
+            >
+              {generating
+                ? '生成中…'
+                : `生成单日工作日志 (${selectedDates.length})`}
+            </button>
+          </div>
+          {generationFailures.length > 0 && (
+            <div className="repo-generation-errors">
+              {generationFailures.map((failure) => (
+                <div key={`${failure.date}:${failure.message}`}>
+                  {failure.date || '请求'}：{failure.message}
+                </div>
+              ))}
+            </div>
+          )}
           {!history || history.days.length === 0 ? (
             <p className="empty-hint">暂无项目活动</p>
           ) : (
             history.days.map((day) => (
-              <div key={day.date} className="repo-day-group">
-                <div className="repo-day-heading">{day.date}</div>
-                {day.gitlog.map((entry) => (
-                  <div key={entry.id} className="repo-ailog-line">
-                    <strong>GitLog</strong> {entry.content}
-                  </div>
-                ))}
-                {day.items.map((item) => (
-                  <div key={item.id} className="repo-ailog-line">
-                    <strong>{item.kind}</strong> {item.content}
-                    {item.assignment === 'unassigned' && '（未归属）'}
-                  </div>
-                ))}
-              </div>
+              <ProjectCommitDay
+                key={day.date}
+                day={day}
+                selected={selectedDates.includes(day.date)}
+                expanded={expandedDates.includes(day.date)}
+                disabled={generating}
+                onSelectedChange={setDateSelected}
+                onExpandedChange={setDateExpanded}
+              />
             ))
           )}
-        </section>
-
-        <section className="repo-activity-section repo-activity-secondary">
-          <button
-            type="button"
-            className="btn secondary btn-sm repo-toggle-commits"
-            onClick={() => setShowCommits((prev) => !prev)}
-          >
-            {showCommits ? '收起 Commits' : `展开 Commits (${commits.length})`}
-          </button>
-          {showCommits &&
-            commits.slice(0, 100).map((c: LegacyCommit) => (
-              <div key={`${c.sha}-${c.date}`} className="repo-commit-line">
-                <span className="repo-commit-date">{c.date}</span>
-                <code>{c.sha.slice(0, 8)}</code> {c.subject}
-              </div>
-            ))}
         </section>
       </div>
     </section>
