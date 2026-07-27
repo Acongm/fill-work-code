@@ -389,20 +389,29 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 - 显示仓库 Origin；
 - 每个 Clone 都有单独的“打开”按钮；
 - “全部”与各 Clone 标签切换活动范围；
-- 以日期分组展示 AILog；
-- Commit 默认折叠，展开后最多显示 100 条；
-- Commit 显示日期、短 SHA 和标题。
-
-扩展端返回数据中包含 `gitlogLines`，但仓库详情当前没有渲染 GitLog。
+- SQLite Commit 事实按日期倒序分组；
+- 每个日期独立展开或收起 Commit，显示提交时间、短 SHA 和标题；
+- 不再单独显示与 Commit 内容重复的 GitLog；
+- 有 Commit 的日期可以复选，并支持一次选择多个日期；
+- “生成单日工作日志”按每个选中日期分别生成内容；
+- 生成内容写入对应日期 JSON 的 `completed`，同时写入指向当前项目的
+  `projectLinks`；
+- 重复生成时对内容和项目关联去重；
+- 成功日期取消选择并重新加载 JSON 回显，失败日期保留选择并显示原因；
+- AI 生成记录和 JSON 中明确关联当前项目的用户记录仍按日期显示在“工作日志”
+  区域。
 
 ### 11.3 主要代码
 
 - 列表：`web/src/projects/pages/ProjectListPage.tsx`
 - 列表项：`web/src/projects/views/RepoListItem.tsx`
 - 详情：`web/src/projects/pages/ProjectDetailPage.tsx`
+- 日期 Commit：`web/src/projects/views/ProjectCommitDay.tsx`
 - Clone 标签：`web/src/projects/views/CloneTagBar.tsx`
-- 注册表与活动聚合：`src/shared/utils/repoRegistry.ts`
-- 消息处理：`src/projects/commands/projectMessages.ts`
+- SQLite 项目历史：`src/database/commands/projectRepository.ts`
+- JSON 项目记录合并：`src/projects/commands/mergeJsonProjectHistory.ts`
+- 工作日志生成：`src/projects/commands/generateProjectDailyLogs.ts`
+- 详情消息处理：`src/projects/commands/projectMessages.ts`
 
 ## 12. 独立 Markdown 预览 Panel
 
@@ -476,7 +485,7 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 | 全日期工时表 | 是 | 是 | 取决于隐藏设置 |
 | 月度 AI 汇总 | 是 | 是 | AI 开启时可达 |
 | 材料浏览/删除/发送 | 是 | 是 | 是 |
-| 仓库 GitLog 展示 | 数据已返回 | 未渲染 | 否 |
+| 仓库 Commit 按日展示与生成工作日志 | 是 | 是 | 是 |
 
 ## 16. 后续功能调整前应关注的结构问题
 
@@ -514,7 +523,7 @@ Git 采集、AI 润色或组合流程开始后，主界面被全屏采集进度�
 
 ### 16.6 已清理的不可达功能
 
-XLSX 导入、单月文件列表、无入口的单工时表邮件流程和旧独立 Webview 已删除。材料页多附件邮件保留。XLSX 生成只读取日期 JSON，不再从 Markdown、TSV 或 SQLite 反向覆盖日报。仓库详情从 SQLite 查询 Commit/GitLog/AI 事实，并合并 JSON 中明确关联到该项目的用户记录。
+XLSX 导入、单月文件列表、无入口的单工时表邮件流程和旧独立 Webview 已删除。材料页多附件邮件保留。XLSX 生成只读取日期 JSON，不再从 Markdown、TSV 或 SQLite 反向覆盖日报。仓库详情从 SQLite 查询 Commit/AI 事实，按日期展示 Commit；用户选择日期生成的项目日志写入对应 JSON，再与明确关联到该项目的其他用户记录一起回显。
 
 ### 16.7 主流程测试覆盖不足
 
