@@ -111,7 +111,7 @@ export async function activate(context: vscode.ExtensionContext) {
               new CodexConversationCollector(),
               new CursorConversationCollector(),
               new QoderConversationCollector(),
-            ]),
+            ], workLogManager),
         );
         vscode.window.showInformationMessage(
           `AI 对话采集完成：${result.sessions} 个会话，${result.messages} 条消息，${result.diagnostics.length} 个跳过/警告。`,

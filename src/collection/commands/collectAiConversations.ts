@@ -6,6 +6,8 @@ import type {
 } from '../types/aiConversation';
 import { stableConversationId } from '../utils/conversationUtils';
 import { matchConversationProject } from '../utils/conversationProjectMatcher';
+import type { WorkLogManager } from '../../daily/utils/workLogManager';
+import { materializeConversationAilog } from './materializeConversationAilog';
 
 export interface AiCollectionResult {
   sessions: number;
@@ -17,6 +19,7 @@ export interface AiCollectionResult {
 export async function collectAiConversations(
   database: Database,
   collectors: AiConversationCollector[],
+  workLogManager?: WorkLogManager,
 ): Promise<AiCollectionResult> {
   const repository = new AiConversationRepository(database);
   const result: AiCollectionResult = {
@@ -25,6 +28,7 @@ export async function collectAiConversations(
     diagnostics: [],
     byProvider: {},
   };
+  const savedSessionIds: string[] = [];
 
   for (const collector of collectors) {
     const counts = { sessions: 0, messages: 0 };
@@ -84,6 +88,7 @@ export async function collectAiConversations(
             sequence,
           })),
         );
+        savedSessionIds.push(session.id);
         counts.sessions += 1;
         counts.messages += conversation.messages.length;
         result.sessions += 1;
@@ -96,6 +101,13 @@ export async function collectAiConversations(
         });
       }
     }
+  }
+  if (workLogManager && savedSessionIds.length > 0) {
+    await materializeConversationAilog(
+      database,
+      workLogManager,
+      savedSessionIds,
+    );
   }
   return result;
 }

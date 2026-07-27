@@ -22,6 +22,7 @@ import {
   applyGitPreview,
   requestForGitPreview,
 } from './applyGitPreview';
+import { saveGeneratedAilog } from './saveGeneratedAilog';
 
 function postCollectLog(deps: HostPanelDeps, line: string, runId?: number): void {
   if (runId !== undefined && runId !== deps.state.collectRunId) {
@@ -581,32 +582,13 @@ export async function applyFillPreview(
     applied = result.applied;
   } else {
     for (const day of daysToApply) {
-      const logDate = new Date(`${day.date}T12:00:00`);
-      const existing =
-        deps.workLogManager.getDailyLog(logDate) ||
-        ({
-          date: day.date,
-          completed: [],
-          plan: [],
-          blockers: [],
-          notes: '',
-          gitlog: [],
-          ailog: [],
-          gitCommit: [],
-          origin_url: [],
-        } as DailyLog);
-      deps.workLogManager.saveDailyLog(logDate, {
-        ...existing,
-        date: day.date,
-        completed: existing.completed,
-        plan: existing.plan,
-        blockers: existing.blockers,
-        notes: existing.notes,
-        gitlog: existing.gitlog,
-        gitCommit: existing.gitCommit,
-        origin_url: existing.origin_url,
-        ailog: day.ailogDraft,
-      });
+      await saveGeneratedAilog(
+        deps.database,
+        deps.workLogManager,
+        day.date,
+        day.ailogDraft,
+        (line) => postCollectLog(deps, line),
+      );
       day.appliedAi = true;
       applied += 1;
     }
