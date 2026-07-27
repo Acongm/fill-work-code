@@ -18,6 +18,10 @@ import type { HostPanelDeps } from '../../app/types/hostDependencies';
 import { loadPluginSettings } from '../../settings/commands/settingsMessages';
 import { handleListRepos } from '../../projects/commands/projectMessages';
 import type { PluginSettings } from '../../settings/types/pluginSettings';
+import {
+  applyGitPreview,
+  requestForGitPreview,
+} from './applyGitPreview';
 
 function postCollectLog(deps: HostPanelDeps, line: string, runId?: number): void {
   if (runId !== undefined && runId !== deps.state.collectRunId) {
@@ -559,37 +563,38 @@ export async function applyFillPreview(
   const monthKey = preview.anchorDate.slice(0, 7);
   const daysToApply = preview.days.filter((day) => day.includeInApply !== false);
 
-  for (const day of daysToApply) {
-    const logDate = new Date(`${day.date}T12:00:00`);
-    const existing =
-      deps.workLogManager.getDailyLog(logDate) ||
-      ({
-        date: day.date,
-        completed: [],
-        plan: [],
-        blockers: [],
-        notes: '',
-        gitlog: [],
-        ailog: [],
-        gitCommit: [],
-        origin_url: [],
-      } as DailyLog);
-
-    if (mode === 'git') {
-      deps.workLogManager.saveDailyLog(logDate, {
-        ...existing,
-        date: day.date,
-        completed: day.completed.length ? day.completed : existing.completed,
-        plan: existing.plan,
-        blockers: existing.blockers,
-        notes: existing.notes,
-        ailog: existing.ailog,
-        gitlog: day.gitlog,
-        gitCommit: day.gitCommit,
-        origin_url: day.originUrl,
-      });
-      day.appliedGit = true;
-    } else {
+  if (mode === 'git') {
+    const result = await applyGitPreview(
+      {
+        database: deps.database,
+        workLogManager: deps.workLogManager,
+        ensureStructuredEvidence: () =>
+          deps.gitEvidenceService.ensureStructuredEvidence(
+            requestForGitPreview(preview),
+            deps.database,
+            (line) => postCollectLog(deps, line),
+          ),
+        onLog: (line) => postCollectLog(deps, line),
+      },
+      preview,
+    );
+    applied = result.applied;
+  } else {
+    for (const day of daysToApply) {
+      const logDate = new Date(`${day.date}T12:00:00`);
+      const existing =
+        deps.workLogManager.getDailyLog(logDate) ||
+        ({
+          date: day.date,
+          completed: [],
+          plan: [],
+          blockers: [],
+          notes: '',
+          gitlog: [],
+          ailog: [],
+          gitCommit: [],
+          origin_url: [],
+        } as DailyLog);
       deps.workLogManager.saveDailyLog(logDate, {
         ...existing,
         date: day.date,
@@ -603,8 +608,8 @@ export async function applyFillPreview(
         ailog: day.ailogDraft,
       });
       day.appliedAi = true;
+      applied += 1;
     }
-    applied += 1;
   }
 
   const settings = await loadPluginSettings(deps);

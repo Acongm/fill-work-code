@@ -213,6 +213,44 @@ export class GitEvidenceService {
     };
   }
 
+  async ensureStructuredEvidence(
+    request: CollectRequest,
+    database: Database,
+    onLog?: (line: string) => void,
+  ): Promise<{ hydrated: boolean; missingMonths: string[] }> {
+    const dates = resolveCollectDates(request);
+    const storageRoot = resolveRuntimePaths(this.storagePath).root;
+    const missingMonths: string[] = [];
+    let hydrated = false;
+
+    for (const monthKey of monthKeysForDates(dates)) {
+      const commitsPath = path.join(storageRoot, monthKey, '_commits.tsv');
+      if (!fs.existsSync(commitsPath)) {
+        missingMonths.push(monthKey);
+        continue;
+      }
+      const content = fs.readFileSync(commitsPath, 'utf-8');
+      const monthDates = new Set(
+        dates.filter((date) => date.startsWith(monthKey)),
+      );
+      if (content.trim()) {
+        await this.persistEvidenceToSqlite(
+          database,
+          storageRoot,
+          content,
+          monthDates,
+          request,
+          onLog,
+        );
+      } else {
+        onLog?.(`[SQLite] ${monthKey} 采集结果为空，无 Commit 需要写入`);
+      }
+      hydrated = true;
+    }
+
+    return { hydrated, missingMonths };
+  }
+
   private async persistEvidenceToSqlite(
     database: Database,
     storageRoot: string,
