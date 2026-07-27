@@ -2,6 +2,7 @@ import type { Database } from '../types/database';
 import {
   SCHEMA_VERSION,
   SCHEMA_VERSION_1,
+  SCHEMA_VERSION_2,
 } from '../utils/schema';
 
 function executeScript(database: Database, script: string): void {
@@ -32,6 +33,13 @@ export async function migrateSchema(database: Database): Promise<void> {
       database.execute(
         `INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
         [1, new Date().toISOString()],
+      );
+    }
+    if (current < 2) {
+      executeScript(database, SCHEMA_VERSION_2);
+      database.execute(
+        `INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
+        [2, new Date().toISOString()],
       );
     }
   });

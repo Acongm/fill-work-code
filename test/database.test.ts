@@ -9,6 +9,7 @@ import { DailyItemRepository } from '../src/database/commands/dailyItemRepositor
 import { ProjectRepository } from '../src/database/commands/projectRepository';
 import { CollectionRepository } from '../src/database/commands/collectionRepository';
 import { AiConversationRepository } from '../src/database/commands/aiConversationRepository';
+import { ProjectionRepository } from '../src/database/commands/projectionRepository';
 
 async function createTestDatabase(): Promise<{
   database: Database;
@@ -23,6 +24,35 @@ async function createTestDatabase(): Promise<{
 }
 
 suite('Database', () => {
+  test('tracks field-scoped JSON projection state', async () => {
+    const fixture = await createTestDatabase();
+    const repository = new ProjectionRepository(fixture.database);
+    try {
+      await repository.markPending('2026-07-27', 'git', 3);
+      assert.deepStrictEqual(repository.get('2026-07-27', 'git'), {
+        date: '2026-07-27',
+        group: 'git',
+        sourceRevision: 3,
+        projectedRevision: 0,
+        status: 'pending',
+        lastError: null,
+      });
+
+      await repository.markFailed('2026-07-27', 'git', 'disk full');
+      assert.strictEqual(repository.listPending()[0].status, 'failed');
+
+      await repository.markProjected('2026-07-27', 'git', 3);
+      assert.deepStrictEqual(repository.listPending(), []);
+      assert.strictEqual(
+        repository.get('2026-07-27', 'git')?.projectedRevision,
+        3,
+      );
+    } finally {
+      await fixture.database.close();
+      fs.rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
   test('enforces explicit project or unassigned daily item assignment', async () => {
     const fixture = await createTestDatabase();
     const repo = new DailyItemRepository(fixture.database);

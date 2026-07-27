@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -145,4 +145,24 @@ CREATE INDEX IF NOT EXISTS idx_ai_sessions_project
   ON ai_sessions(project_id);
 CREATE INDEX IF NOT EXISTS idx_ai_messages_session_sequence
   ON ai_messages(session_id, sequence);
+`;
+
+export const SCHEMA_VERSION_2 = `
+CREATE TABLE IF NOT EXISTS json_projection_state (
+  date TEXT NOT NULL,
+  field_group TEXT NOT NULL CHECK (
+    field_group IN ('git', 'ai')
+  ),
+  source_revision INTEGER NOT NULL DEFAULT 0,
+  projected_revision INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL CHECK (
+    status IN ('pending', 'projected', 'failed')
+  ),
+  last_error TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (date, field_group)
+);
+
+CREATE INDEX IF NOT EXISTS idx_json_projection_pending
+  ON json_projection_state(status, date, field_group);
 `;
