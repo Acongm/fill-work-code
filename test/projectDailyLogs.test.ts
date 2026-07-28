@@ -107,6 +107,19 @@ async function rewriteFirstDayWithSlash(
 }
 
 suite('Project daily logs', () => {
+  test('normalizes selected dates before the Webview sends generation request', () => {
+    const projectRoot = path.resolve(__dirname, '../..');
+    const page = fs.readFileSync(
+      path.join(
+        projectRoot,
+        'web/src/projects/pages/ProjectDetailPage.tsx',
+      ),
+      'utf8',
+    );
+
+    assert.match(page, /dates:\s*selectedDates\.map\(normalizeCommitDay\)/);
+  });
+
   test('normalizes slash commit dates at the collection boundary', () => {
     assert.strictEqual(normalizeCommitDay('2026/07/26'), '2026-07-26');
   });

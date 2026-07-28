@@ -8,6 +8,7 @@ import type {
   ProjectHistory,
 } from '../types/projectHistory';
 import type { RepoGroup } from '@host-utils/types/repoRegistry';
+import { normalizeCommitDay } from '@host-utils/utils/dateFormat';
 import { remainingSelectedDates } from '@host-utils/utils/projectDateSelection';
 import { vscode } from '../../shared/utils/vscodeApi';
 
@@ -95,7 +96,7 @@ export const RepoDetailOverlay: React.FC<RepoDetailOverlayProps> = ({
     vscode.postMessage({
       command: 'generateProjectDailyLogs',
       originUrl: group.originUrl,
-      dates: selectedDates,
+      dates: selectedDates.map(normalizeCommitDay),
     });
   };
 
