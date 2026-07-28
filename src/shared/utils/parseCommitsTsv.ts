@@ -1,3 +1,7 @@
+import { normalizeCommitDay } from './dateFormat';
+
+export { normalizeCommitDay } from './dateFormat';
+
 export interface ParsedCommitRow {
   repoRoot: string;
   repoName: string;
@@ -6,11 +10,6 @@ export interface ParsedCommitRow {
   commitDay: string;
   subject: string;
   topDirs?: string;
-}
-
-export function normalizeCommitDay(raw: string): string {
-  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : raw.slice(0, 10);
 }
 
 /** Parse _commits.tsv lines (tab-separated, >=9 cols). */

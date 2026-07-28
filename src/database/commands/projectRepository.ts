@@ -1,5 +1,6 @@
 import type { Database, SqlValue } from '../types/database';
 import type { DailyItem } from './dailyItemRepository';
+import { normalizeCommitDay } from '../../shared/utils/dateFormat';
 
 export interface ProjectInput {
   id: string;
@@ -335,7 +336,7 @@ export class ProjectRepository {
     };
 
     for (const row of commits) {
-      ensureDay(row.committed_at.slice(0, 10)).commits.push({
+      ensureDay(normalizeCommitDay(row.committed_at)).commits.push({
         id: row.id,
         cloneId: row.clone_id,
         sha: row.sha,
@@ -345,14 +346,14 @@ export class ProjectRepository {
       });
     }
     for (const row of gitlog) {
-      ensureDay(row.date).gitlog.push({
+      ensureDay(normalizeCommitDay(row.date)).gitlog.push({
         id: row.id,
         cloneId: row.clone_id,
         content: row.content,
       });
     }
     for (const row of items) {
-      ensureDay(row.date).items.push({
+      ensureDay(normalizeCommitDay(row.date)).items.push({
         id: row.id,
         date: row.date,
         kind: row.kind,

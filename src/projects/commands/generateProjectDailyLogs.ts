@@ -4,6 +4,7 @@ import { loadDailyLog } from '../../daily/commands/loadDailyLog';
 import { ProjectRepository } from '../../database/commands/projectRepository';
 import type { Database } from '../../database/types/database';
 import { appendUniqueCompleted } from '../../shared/utils/completedSync';
+import { normalizeCommitDay } from '../../shared/utils/dateFormat';
 import { setProjectLink } from '../../shared/utils/projectLinks';
 import {
   buildProjectDailyEntries,
@@ -33,13 +34,16 @@ export async function generateProjectDailyLogs(
   }
 
   const history = await projectRepository.getHistory(project.id);
-  const days = new Map(history.days.map((day) => [day.date, day]));
+  const days = new Map(
+    history.days.map((day) => [normalizeCommitDay(day.date), day]),
+  );
   const generatedDates: string[] = [];
   const failures: ProjectDailyLogFailure[] = [];
 
-  for (const date of [...new Set(requestedDates)]) {
+  for (const requestedDate of [...new Set(requestedDates)]) {
+    const date = normalizeCommitDay(requestedDate);
     if (!isDailyLogDate(date)) {
-      failures.push({ date, message: '日期格式无效' });
+      failures.push({ date: requestedDate, message: '日期格式无效' });
       continue;
     }
     const day = days.get(date);

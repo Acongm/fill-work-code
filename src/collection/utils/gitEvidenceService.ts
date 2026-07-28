@@ -35,22 +35,9 @@ import { resolveRuntimePaths } from '../../settings/utils/pathUtils';
 import { evidenceTsvToFacts } from './evidenceToFacts';
 import { applyCollection } from '../commands/applyCollection';
 import { CollectionRepository } from '../../database/commands/collectionRepository';
+import { normalizeCommitDay } from '../../shared/utils/dateFormat';
 
 export { resolveFillDateRange, resolveFillDates } from '../../shared/utils/fillAnchor';
-
-function normalizeCommitDay(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.includes('/')) {
-    return trimmed.replace(/\//g, '-').slice(0, 10);
-  }
-  if (trimmed.includes('-')) {
-    return trimmed.slice(0, 10);
-  }
-  if (trimmed.length >= 8) {
-    return `${trimmed.slice(0, 4)}-${trimmed.slice(4, 6)}-${trimmed.slice(6, 8)}`;
-  }
-  return trimmed;
-}
 
 export class GitEvidenceService {
   private activeChild: ChildProcess | null = null;

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { localTodayStr } from './fillAnchor';
+import { normalizeCommitDay } from './dateFormat';
 
 export interface GitEvidenceMeta {
   configHash: string;
@@ -10,14 +11,6 @@ export interface GitEvidenceMeta {
 }
 
 const META_FILE = '.runtime/git-evidence-meta.json';
-
-function normalizeCommitDay(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.includes('/')) {
-    return trimmed.replace(/\//g, '-').slice(0, 10);
-  }
-  return trimmed.slice(0, 10);
-}
 
 export function gitEvidenceMetaPath(monthDir: string): string {
   return path.join(monthDir, META_FILE);

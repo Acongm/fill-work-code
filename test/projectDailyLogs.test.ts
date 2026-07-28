@@ -12,6 +12,7 @@ import { loadDailyLog } from '../src/daily/commands/loadDailyLog';
 import { buildProjectDailyEntries } from '../src/projects/utils/buildProjectDailyEntries';
 import { generateProjectDailyLogs } from '../src/projects/commands/generateProjectDailyLogs';
 import { remainingSelectedDates } from '../src/shared/utils/projectDateSelection';
+import { normalizeCommitDay } from '../src/shared/utils/parseCommitsTsv';
 
 function commit(id: string, subject: string): ProjectHistoryCommit {
   return {
@@ -89,7 +90,79 @@ async function createProjectFixture() {
   };
 }
 
+async function rewriteFirstDayWithSlash(
+  fixture: Awaited<ReturnType<typeof createProjectFixture>>,
+): Promise<void> {
+  fixture.database.execute(
+    `UPDATE commits
+     SET committed_at = '2026/07/26T10:00:00.000Z'
+     WHERE id = 'commit-26'`,
+  );
+  fixture.database.execute(
+    `UPDATE gitlog_entries
+     SET date = '2026/07/26'
+     WHERE id = 'gitlog-26'`,
+  );
+  await fixture.database.flush();
+}
+
 suite('Project daily logs', () => {
+  test('normalizes slash commit dates at the collection boundary', () => {
+    assert.strictEqual(normalizeCommitDay('2026/07/26'), '2026-07-26');
+  });
+
+  test('returns canonical project history dates for legacy SQLite rows', async () => {
+    const fixture = await createProjectFixture();
+    try {
+      await rewriteFirstDayWithSlash(fixture);
+
+      const history = await new ProjectRepository(
+        fixture.database,
+      ).getHistory('project-a');
+      const firstDay = history.days.find((day) =>
+        day.commits.some((item) => item.id === 'commit-26'),
+      );
+
+      assert.strictEqual(firstDay?.date, '2026-07-26');
+    } finally {
+      await fixture.database.close();
+      fs.rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  test('accepts slash dates and writes the canonical daily JSON date', async () => {
+    const fixture = await createProjectFixture();
+    try {
+      await rewriteFirstDayWithSlash(fixture);
+
+      const result = await generateProjectDailyLogs(
+        fixture.database,
+        fixture.manager,
+        'https://example.com/a.git',
+        ['2026/07/26'],
+      );
+
+      assert.deepStrictEqual(result, {
+        generatedDates: ['2026-07-26'],
+        failures: [],
+      });
+      assert.deepStrictEqual(
+        loadDailyLog(fixture.manager, '2026-07-26').completed,
+        ['完成第一天功能'],
+      );
+    } finally {
+      await fixture.database.close();
+      fs.rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  test('clears slash selections after canonical dates are generated', () => {
+    assert.deepStrictEqual(
+      remainingSelectedDates(['2026/07/26'], ['2026-07-26']),
+      [],
+    );
+  });
+
   test('uses deduplicated structured GitLog before commit subjects', () => {
     assert.deepStrictEqual(
       buildProjectDailyEntries({
