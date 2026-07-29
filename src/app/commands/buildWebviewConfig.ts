@@ -2,8 +2,11 @@ import * as vscode from 'vscode';
 import type { HostPanelDeps } from '../types/hostDependencies';
 import { loadPluginSettings } from '../../settings/commands/settingsMessages';
 import { loadRuntimeConfiguration } from '../../settings/commands/settingsStore';
-import { loadDailyProjection } from '../../daily/commands/dailyMessages';
-import { ProjectRepository } from '../../database/commands/projectRepository';
+import {
+  loadDailyProjection,
+  repositoryOptionsForDate,
+} from '../../daily/commands/dailyMessages';
+import { listRepositoryOptions } from '../../shared/utils/listRepositoryOptions';
 
 export async function buildWebConfig(deps: HostPanelDeps) {
   const settings = await loadPluginSettings(deps);
@@ -42,10 +45,34 @@ export async function sendFullConfig(deps: HostPanelDeps): Promise<void> {
   });
 }
 
+export async function refreshActiveDate(
+  deps: HostPanelDeps,
+  date?: string,
+): Promise<void> {
+  if (!deps.view) {
+    return;
+  }
+  const started = Date.now();
+  const activeDate =
+    date ?? deps.state.activeDate ?? new Date().toLocaleDateString('en-CA');
+  deps.state.activeDate = activeDate;
+  const projection = loadDailyProjection(deps, activeDate);
+  deps.view.webview.postMessage({
+    command: 'dateLoaded',
+    log: projection.log,
+    items: projection.items,
+    repositoryOptions: repositoryOptionsForDate(deps, activeDate),
+  });
+  deps.outputChannel.appendLine(
+    `[perf] refreshActiveDate ${activeDate} ${Date.now() - started}ms`,
+  );
+}
+
 export async function updateWebview(deps: HostPanelDeps): Promise<void> {
   if (!deps.view) {
     return;
   }
+  const started = Date.now();
   const activeDate =
     deps.state.activeDate ?? new Date().toLocaleDateString('en-CA');
   const projection = loadDailyProjection(deps, activeDate);
@@ -55,9 +82,10 @@ export async function updateWebview(deps: HostPanelDeps): Promise<void> {
     todayLog: projection.log,
     items: projection.items,
     activeDate,
-    repositoryOptions: new ProjectRepository(deps.database)
-      .list('', false)
-      .map((project) => project.originUrl),
+    repositoryOptions: listRepositoryOptions(deps.database),
     config,
   });
+  deps.outputChannel.appendLine(
+    `[perf] init ${activeDate} ${Date.now() - started}ms`,
+  );
 }

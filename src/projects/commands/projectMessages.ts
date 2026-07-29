@@ -3,6 +3,7 @@ import type { HostPanelDeps } from '../../app/types/hostDependencies';
 import { loadPluginSettings } from '../../settings/commands/settingsMessages';
 import { ProjectRepository } from '../../database/commands/projectRepository';
 import { mergeJsonProjectHistory } from './mergeJsonProjectHistory';
+import { invalidateRepositoryOptionsCache } from '../../shared/utils/listRepositoryOptions';
 
 function toLegacyGroup(
   project: ReturnType<ProjectRepository['list']>[number],
@@ -119,5 +120,6 @@ export async function handleUpdateRepo(
     return;
   }
   await new ProjectRepository(deps.database).updateFlags(row.project_id, flags);
+  invalidateRepositoryOptionsCache();
   await handleListRepos(deps);
 }

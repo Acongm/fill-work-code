@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { OverlayHeader } from '../../shared/views/OverlayHeader';
 import { CloneTagBar } from '../views/CloneTagBar';
 import { ProjectCommitDay } from '../views/ProjectCommitDay';
+import { RepoDailyReportList } from '../views/RepoDailyReportList';
 import type {
   ProjectDailyLogsGeneratedMessage,
   ProjectHistory,
@@ -10,6 +11,7 @@ import type {
 import type { RepoGroup } from '@host-utils/types/repoRegistry';
 import { normalizeCommitDay } from '@host-utils/utils/dateFormat';
 import { remainingSelectedDates } from '@host-utils/utils/projectDateSelection';
+import { extractRepoDailyReports } from '../utils/extractRepoDailyReports';
 import { vscode } from '../../shared/utils/vscodeApi';
 
 interface RepoDetailOverlayProps {
@@ -29,6 +31,11 @@ export const RepoDetailOverlay: React.FC<RepoDetailOverlayProps> = ({
   const [generationFailures, setGenerationFailures] = useState<
     Array<{ date: string; message: string }>
   >([]);
+
+  const repoDailyReports = useMemo(
+    () => extractRepoDailyReports(history),
+    [history],
+  );
 
   const tags = [
     { id: 'all', label: '全部' },
@@ -121,9 +128,14 @@ export const RepoDetailOverlay: React.FC<RepoDetailOverlayProps> = ({
         </div>
         <CloneTagBar tags={tags} activeId={activeTag} onChange={setActiveTag} />
 
+        <section className="repo-daily-report-section">
+          <h4>仓库日报</h4>
+          <RepoDailyReportList reports={repoDailyReports} />
+        </section>
+
         <section className="repo-activity-section">
           <div className="repo-activity-toolbar">
-            <h4>工作日志</h4>
+            <h4>Commit 活动</h4>
             <button
               type="button"
               className="btn"
@@ -132,7 +144,7 @@ export const RepoDetailOverlay: React.FC<RepoDetailOverlayProps> = ({
             >
               {generating
                 ? '生成中…'
-                : `生成单日工作日志 (${selectedDates.length})`}
+                : `生成工作日志 (${selectedDates.length})`}
             </button>
           </div>
           {generationFailures.length > 0 && (

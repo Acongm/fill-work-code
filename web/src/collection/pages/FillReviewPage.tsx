@@ -73,9 +73,9 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
       />
       <div className="overlay-body fill-review-body">
         <p className="fill-review-note">
-          {isGitStep
-            ? '确认 SQLite 中的 Git 采集结果后同步 JSON。生成字段只读，可按天决定是否写入。'
-            : '确认 AI 润色结果后写入 SQLite 并同步只读 AILog，不会修改今日完成。'}
+          {isAiStep
+            ? '确认 AI 润色结果后写入今日完成，并按相关仓库分配归属。AILog 仅用于 Cursor/Codex/Qoder 对话采集。'
+            : '确认 SQLite 中的 Git 采集结果后同步 JSON。生成字段只读，可按天决定是否写入。'}
         </p>
         {preview.error && <div className="warning">{preview.error}</div>}
         {preview.days.map((day, index) => (
@@ -120,8 +120,8 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
             )}
             {isAiStep && (
               <EditableItemList
-                label="AILog 候选（只读）"
-                hint="确认后先写入 SQLite，再同步 JSON"
+                label="今日完成（AI 润色候选）"
+                hint="确认后写入今日完成并分配仓库归属"
                 items={day.ailogDraft}
                 readOnly
                 onChange={() => {}}
@@ -146,7 +146,7 @@ export const FillReviewOverlay: React.FC<FillReviewOverlayProps> = ({
         )}
         {isAiStep && (
           <button type="button" className="btn" onClick={onApplyAi}>
-            确认写入 AILog
+            确认写入今日完成
           </button>
         )}
       </footer>

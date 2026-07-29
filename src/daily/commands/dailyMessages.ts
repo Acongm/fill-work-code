@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import type { DailyLog } from '../utils/workLogManager';
 import type { HostPanelDeps } from '../../app/types/hostDependencies';
-import { getRepositoryOptions } from '../../shared/utils/panelUtils';
-import { ProjectRepository } from '../../database/commands/projectRepository';
+import { listRepositoryOptions } from '../../shared/utils/listRepositoryOptions';
 import { loadDailyLog, loadMonthlyLogs } from './loadDailyLog';
 import { syncGeneratedJson } from './syncGeneratedJson';
 import type { ProjectionGroup } from '../../database/commands/projectionRepository';
@@ -29,10 +28,8 @@ export function loadDailyProjection(
   };
 }
 
-function repositoryOptions(deps: HostPanelDeps): string[] {
-  return new ProjectRepository(deps.database)
-    .list('', false)
-    .map((project) => project.originUrl);
+export function repositoryOptionsForDate(deps: HostPanelDeps, _date: string) {
+  return listRepositoryOptions(deps.database);
 }
 
 export async function handleSave(
@@ -52,6 +49,7 @@ export async function handleSave(
 }
 
 export async function handleLoadDate(deps: HostPanelDeps, date: string): Promise<void> {
+  const started = Date.now();
   deps.state.activeDate = date;
   try {
     const projection = loadDailyProjection(deps, date);
@@ -59,15 +57,19 @@ export async function handleLoadDate(deps: HostPanelDeps, date: string): Promise
       command: 'dateLoaded',
       log: projection.log,
       items: projection.items,
-      repositoryOptions: repositoryOptions(deps),
+      repositoryOptions: repositoryOptionsForDate(deps, date),
     });
   } catch (e) {
     deps.postToWebview({
       command: 'dateLoaded',
       log: emptyLog(date),
       items: [],
-      repositoryOptions: repositoryOptions(deps),
+      repositoryOptions: repositoryOptionsForDate(deps, date),
     });
+  } finally {
+    deps.outputChannel.appendLine(
+      `[perf] loadDate ${date} ${Date.now() - started}ms`,
+    );
   }
 }
 
@@ -92,9 +94,10 @@ export function handleLoadRepositoryOptions(
   month?: string,
   date?: string,
 ): void {
+  const targetDate = date || `${month || ''}-01`;
   deps.postToWebview({
     command: 'repositoryOptionsLoaded',
-    options: getRepositoryOptions(month || date?.slice(0, 7) || ''),
+    options: repositoryOptionsForDate(deps, targetDate),
   });
 }
 

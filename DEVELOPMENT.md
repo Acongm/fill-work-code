@@ -27,6 +27,21 @@ npm run compile         # 首次编译
 
 - `preLaunchTask` 会先执行 `npm run compile`（esbuild + webview vite）
 - `extensionDevelopmentPath` 指向本仓库根目录
+- `timeout: 120000`：扩展宿主启动超时放宽至 120 秒（避免 10 秒误报）
+- `stopOnEntry: false`：不在入口断点暂停
+- **Run Extension (Skip Build)**：已编译时可跳过 preLaunchTask，启动更快
+
+### 提示「扩展未在 10 秒内启动 / 可能在第一行已停止」
+
+这通常**不是扩展崩溃**，而是调试器在等你在 Extension Host 进程上点「继续」：
+
+1. 切到 **Run and Debug** 面板，确认没有勾选 **Stop on Entry**（入口暂停）
+2. 若调试工具栏处于暂停状态，按 **F5（Continue / 继续）** 或点击 ▶️
+3. 检查是否在 `dist/extension.js` 或 `extension.ts` 上误设了 **无条件断点**
+4. 若仍超时：先终端执行 `npm run compile`，再用 **Run Extension (Skip Build)** 启动
+5. macOS 上若日志出现 `Unable to resolve your shell environment`：已在 [`.vscode/settings.json`](./.vscode/settings.json) 将 shell 环境解析超时设为 120 秒；仍慢时可精简 `~/.zshrc` 中阻塞命令（如 `nvm`、耗时 `brew` 等）
+
+Extension Development Host 首次冷启动可能需 15–30 秒（加载 wasm、SQLite 迁移），属正常现象；启动完成后切日应明显快于优化前。
 
 ### 方式二：Watch 热更新
 

@@ -1,8 +1,5 @@
 import * as React from 'react';
-import type {
-  ProjectHistoryDay,
-  ProjectHistoryItem,
-} from '../types/projectHistory';
+import type { ProjectHistoryDay } from '../types/projectHistory';
 
 interface ProjectCommitDayProps {
   day: ProjectHistoryDay;
@@ -12,14 +9,6 @@ interface ProjectCommitDayProps {
   onSelectedChange: (date: string, selected: boolean) => void;
   onExpandedChange: (date: string, expanded: boolean) => void;
 }
-
-const itemLabels: Record<ProjectHistoryItem['kind'], string> = {
-  completed: '完成',
-  ailog: 'AI 日志',
-  todo: '待办',
-  blocker: '阻碍',
-  note: '备注',
-};
 
 function commitTime(committedAt: string): string {
   const date = new Date(committedAt);
@@ -85,18 +74,6 @@ export const ProjectCommitDay: React.FC<ProjectCommitDayProps> = ({
               </span>
               <code>{commit.sha.slice(0, 8)}</code>
               <span>{commit.subject}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {day.items.length > 0 && (
-        <div className="repo-day-log-items">
-          <strong>工作日志</strong>
-          {day.items.map((item) => (
-            <div key={item.id} className="repo-ailog-line">
-              <span className="repo-log-kind">{itemLabels[item.kind]}</span>
-              {item.content}
             </div>
           ))}
         </div>

@@ -7,6 +7,11 @@ interface EditableItemListProps {
   readOnly?: boolean;
   onChange: (items: string[]) => void;
   placeholder?: string;
+  renderItemMeta?: (
+    item: string,
+    idx: number,
+    isEditing: boolean,
+  ) => React.ReactNode;
 }
 
 export const EditableItemList: React.FC<EditableItemListProps> = ({
@@ -16,6 +21,7 @@ export const EditableItemList: React.FC<EditableItemListProps> = ({
   readOnly = false,
   onChange,
   placeholder = '输入后回车添加',
+  renderItemMeta,
 }) => {
   const [draft, setDraft] = React.useState('');
   const [editIdx, setEditIdx] = React.useState<number | null>(null);
@@ -52,55 +58,70 @@ export const EditableItemList: React.FC<EditableItemListProps> = ({
         {items.length === 0 ? (
           <li className="editable-item-empty">暂无条目</li>
         ) : (
-          items.map((item, idx) => (
-            <li key={`${idx}-${item.slice(0, 24)}`} className="editable-item-row">
-              {editIdx === idx && !readOnly ? (
-                <>
-                  <input
-                    className="editable-item-input"
-                    value={editVal}
-                    onChange={(e) => setEditVal(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        saveEdit();
-                      } else if (e.key === 'Escape') {
-                        setEditIdx(null);
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <button type="button" className="btn btn--ghost btn-sm" onClick={saveEdit}>
-                    ✓
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="editable-item-text">{item}</span>
-                  {!readOnly && (
+          items.map((item, idx) => {
+            const isEditing = editIdx === idx && !readOnly;
+            return (
+              <li
+                key={`${idx}-${item.slice(0, 24)}`}
+                className="editable-item-row"
+              >
+                <div className="editable-item-row-main">
+                  {isEditing ? (
                     <>
-                      <button
-                        type="button"
-                        className="btn btn--ghost btn-sm"
-                        onClick={() => {
-                          setEditIdx(idx);
-                          setEditVal(item);
+                      <input
+                        className="editable-item-input"
+                        value={editVal}
+                        onChange={(e) => setEditVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            saveEdit();
+                          } else if (e.key === 'Escape') {
+                            setEditIdx(null);
+                          }
                         }}
-                      >
-                        编辑
-                      </button>
+                        autoFocus
+                      />
                       <button
                         type="button"
                         className="btn btn--ghost btn-sm"
-                        onClick={() => onChange(items.filter((_, i) => i !== idx))}
+                        onClick={saveEdit}
                       >
-                        删除
+                        ✓
                       </button>
                     </>
+                  ) : (
+                    <>
+                      <span className="editable-item-text">{item}</span>
+                      {!readOnly && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn-sm"
+                            onClick={() => {
+                              setEditIdx(idx);
+                              setEditVal(item);
+                            }}
+                          >
+                            编辑
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn-sm"
+                            onClick={() =>
+                              onChange(items.filter((_, i) => i !== idx))
+                            }
+                          >
+                            删除
+                          </button>
+                        </>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-            </li>
-          ))
+                </div>
+                {renderItemMeta?.(item, idx, isEditing)}
+              </li>
+            );
+          })
         )}
       </ul>
       {!readOnly && (

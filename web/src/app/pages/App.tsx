@@ -26,7 +26,7 @@ import {
 } from '@host-utils/utils/fillAnchor';
 import type { SecretMeta } from '../../shared/views/SecretField';
 import { vscode } from '../../shared/utils/vscodeApi';
-import { appendUniqueCompleted } from '@host-utils/utils/completedSync';
+import type { RepositoryOption } from '@host-utils/types/repositoryOption';
 import type { DailyProjectLink } from '@host-utils/types/dailyLog';
 import {
   reconcileProjectLinks,
@@ -182,7 +182,7 @@ export const App: React.FC = () => {
   const [notification, setNotification] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [timesheetLoading, setTimesheetLoading] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [dateLoading, setDateLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   // 汇总页状态
@@ -191,7 +191,7 @@ export const App: React.FC = () => {
   const [monthlyData, setMonthlyData] = useState<MonthlyData | null>(null);
   const [materials, setMaterials] = useState<{ month: string; files: { name: string; path: string; size: number; selected: boolean }[] }[]>([]);
   const [filterDailyJson, setFilterDailyJson] = useState(true);
-  const [repositoryOptions, setRepositoryOptions] = useState<string[]>([]);
+  const [repositoryOptions, setRepositoryOptions] = useState<RepositoryOption[]>([]);
 
   const [fillReview, setFillReview] = useState<FillPreview | null>(null);
   const [showPanelSettings, setShowPanelSettings] = useState(false);
@@ -287,10 +287,8 @@ export const App: React.FC = () => {
 
   // 加载日期
   const loadDate = useCallback((dateStr: string) => {
-    setLoading(true);
+    setDateLoading(true);
     vscode.postMessage({ command: 'loadDate', date: dateStr });
-    vscode.postMessage({ command: 'loadRepositoryOptions', month: dateStr.slice(0, 7) });
-    vscode.postMessage({ command: 'updateDailyPreview', date: dateStr });
   }, []);
 
   loadDateRef.current = loadDate;
@@ -317,12 +315,12 @@ export const App: React.FC = () => {
           if (msg.repositoryOptions) { setRepositoryOptions(msg.repositoryOptions); }
           if (msg.config) { setConfig(msg.config); }
           setDirty(false);
-          setLoading(false);
+          setDateLoading(false);
           break;
         case 'dateLoaded':
           if (msg.log) { setLog(msg.log); setDirty(false); }
           if (msg.repositoryOptions) { setRepositoryOptions(msg.repositoryOptions); }
-          setLoading(false);
+          setDateLoading(false);
           break;
         case 'repositoryOptionsLoaded':
           setRepositoryOptions(msg.options || []);
@@ -725,27 +723,6 @@ export const App: React.FC = () => {
     updateLog((prev) => ({ ...prev, [field]: items, projectLinks }));
   };
 
-  const syncToCompleted = (items: string[], label: string) => {
-    if (!window.confirm(`将 ${label} 内容去重追加到“今日完成”？`)) {
-      return;
-    }
-    updateLog((prev) => ({
-      ...prev,
-      ...(() => {
-        const completed = appendUniqueCompleted(prev.completed, items);
-        return {
-          completed,
-          projectLinks: reconcileProjectLinks(
-            'completed',
-            prev.completed,
-            completed,
-            prev.projectLinks || [],
-          ),
-        };
-      })(),
-    }));
-  };
-
   const showDailyOptionalField = (
     field: 'gitlog' | 'gitCommit' | 'plan' | 'blockers' | 'notes',
   ): boolean => {
@@ -773,18 +750,24 @@ export const App: React.FC = () => {
     <div>
       <div className="today-toolbar">
         <div className="today-toolbar-row today-toolbar-row--date">
-          <button style={S.navBtn} type="button" onClick={goPrev} aria-label="前一天">
+          <button style={S.navBtn} type="button" onClick={goPrev} aria-label="前一天" disabled={dateLoading}>
             ◀
           </button>
           <input
             type="date"
             style={S.dateInput}
             value={log.date}
+            disabled={dateLoading}
             onChange={e => e.target.value && loadDate(e.target.value)}
           />
-          <button style={S.navBtn} type="button" onClick={goNext} aria-label="后一天">
+          <button style={S.navBtn} type="button" onClick={goNext} aria-label="后一天" disabled={dateLoading}>
             ▶
           </button>
+          {dateLoading && (
+            <span className="date-loading-indicator" aria-live="polite">
+              加载中…
+            </span>
+          )}
           {!isToday && (
             <button style={S.btnSm} type="button" onClick={goToday}>
               今天
@@ -863,7 +846,7 @@ export const App: React.FC = () => {
               onClick={() => polishAi()}
               title={
                 pluginSecrets?.apiKey.configured
-                  ? '基于已有 Git 采集数据润色 AILog（不重复脚本采集）'
+                  ? '基于已有 Git 采集数据润色并写入今日完成（不重复脚本采集）'
                   : '请先在系统设置配置 API Key 并启用 AI 润色'
               }
             >
@@ -875,7 +858,7 @@ export const App: React.FC = () => {
 
       <DailyPage
         log={log}
-        loading={loading}
+        dateLoading={dateLoading}
         repositoryOptions={repositoryOptions}
         showGitlog={showDailyOptionalField('gitlog')}
         showGitCommit={showDailyOptionalField('gitCommit')}
@@ -906,7 +889,6 @@ export const App: React.FC = () => {
             ),
           }))
         }
-        onSyncToCompleted={syncToCompleted}
         onSyncGeneratedJson={() =>
           vscode.postMessage({
             command: 'syncGeneratedJson',

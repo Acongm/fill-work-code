@@ -10,9 +10,14 @@ import { openSqlJsDatabase } from '../src/database/utils/sqlJsDatabase';
 import { WorkLogManager } from '../src/daily/utils/workLogManager';
 import { loadDailyLog } from '../src/daily/commands/loadDailyLog';
 import { buildProjectDailyEntries } from '../src/projects/utils/buildProjectDailyEntries';
-import { generateProjectDailyLogs } from '../src/projects/commands/generateProjectDailyLogs';
+import {
+  generateProjectDailyLogs,
+  type ProjectDailyLogAiContext,
+} from '../src/projects/commands/generateProjectDailyLogs';
 import { remainingSelectedDates } from '../src/shared/utils/projectDateSelection';
 import { normalizeCommitDay } from '../src/shared/utils/parseCommitsTsv';
+import type { FillPreviewDay } from '../src/shared/types/fillPreview';
+import type { PluginSettings } from '../src/settings/types/pluginSettings';
 
 function commit(id: string, subject: string): ProjectHistoryCommit {
   return {
@@ -22,6 +27,25 @@ function commit(id: string, subject: string): ProjectHistoryCommit {
     subject,
     author: null,
     committedAt: '2026-07-27T10:00:00.000Z',
+  };
+}
+
+const testSettings = {} as PluginSettings;
+
+function createMockAi(
+  polishDay?: ProjectDailyLogAiContext['polishDay'],
+  apiKey = 'test-key',
+): ProjectDailyLogAiContext {
+  return {
+    apiKey,
+    settings: testSettings,
+    polishDay:
+      polishDay ??
+      (async (day: FillPreviewDay) => ({
+        ...day,
+        ailogDraft: day.gitlog.map((entry) => `润色：${entry}`),
+        warnings: [],
+      })),
   };
 }
 
@@ -118,6 +142,7 @@ suite('Project daily logs', () => {
     );
 
     assert.match(page, /dates:\s*selectedDates\.map\(normalizeCommitDay\)/);
+    assert.match(page, /生成工作日志/);
   });
 
   test('normalizes slash commit dates at the collection boundary', () => {
@@ -153,6 +178,7 @@ suite('Project daily logs', () => {
         fixture.manager,
         'https://example.com/a.git',
         ['2026/07/26'],
+        createMockAi(),
       );
 
       assert.deepStrictEqual(result, {
@@ -161,7 +187,7 @@ suite('Project daily logs', () => {
       });
       assert.deepStrictEqual(
         loadDailyLog(fixture.manager, '2026-07-26').completed,
-        ['完成第一天功能'],
+        ['润色：完成第一天功能'],
       );
     } finally {
       await fixture.database.close();
@@ -220,6 +246,7 @@ suite('Project daily logs', () => {
         fixture.manager,
         'https://example.com/a.git',
         ['2026-07-26', '2026-07-27'],
+        createMockAi(),
       );
 
       assert.deepStrictEqual(result, {
@@ -228,14 +255,14 @@ suite('Project daily logs', () => {
       });
       assert.deepStrictEqual(
         loadDailyLog(fixture.manager, '2026-07-26').completed,
-        ['完成第一天功能'],
+        ['润色：完成第一天功能'],
       );
       assert.deepStrictEqual(
         loadDailyLog(fixture.manager, '2026-07-26').projectLinks,
         [
           {
             field: 'completed',
-            content: '完成第一天功能',
+            content: '润色：完成第一天功能',
             assignment: 'project',
             projectOriginUrl: 'https://example.com/a.git',
           },
@@ -243,7 +270,7 @@ suite('Project daily logs', () => {
       );
       assert.deepStrictEqual(
         loadDailyLog(fixture.manager, '2026-07-27').completed,
-        ['完成第二天功能'],
+        ['润色：完成第二天功能'],
       );
     } finally {
       await fixture.database.close();
@@ -259,16 +286,18 @@ suite('Project daily logs', () => {
         fixture.manager,
         'https://example.com/a.git',
         ['2026-07-26'],
+        createMockAi(),
       );
       await generateProjectDailyLogs(
         fixture.database,
         fixture.manager,
         'https://example.com/a.git',
         ['2026-07-26'],
+        createMockAi(),
       );
 
       const log = loadDailyLog(fixture.manager, '2026-07-26');
-      assert.deepStrictEqual(log.completed, ['完成第一天功能']);
+      assert.deepStrictEqual(log.completed, ['润色：完成第一天功能']);
       assert.strictEqual(log.projectLinks?.length, 1);
     } finally {
       await fixture.database.close();
@@ -284,6 +313,7 @@ suite('Project daily logs', () => {
         fixture.manager,
         'https://example.com/a.git',
         ['bad-date', '2026-07-28', '2026-07-27'],
+        createMockAi(),
       );
 
       assert.deepStrictEqual(result.generatedDates, ['2026-07-27']);
@@ -293,7 +323,56 @@ suite('Project daily logs', () => {
       ]);
       assert.deepStrictEqual(
         loadDailyLog(fixture.manager, '2026-07-27').completed,
-        ['完成第二天功能'],
+        ['润色：完成第二天功能'],
+      );
+    } finally {
+      await fixture.database.close();
+      fs.rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  test('blocks generation when AI API key is missing', async () => {
+    const fixture = await createProjectFixture();
+    try {
+      await assert.rejects(
+        () =>
+          generateProjectDailyLogs(
+            fixture.database,
+            fixture.manager,
+            'https://example.com/a.git',
+            ['2026-07-26'],
+            createMockAi(undefined, ''),
+          ),
+        /未配置 AI API Key/,
+      );
+    } finally {
+      await fixture.database.close();
+      fs.rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
+  test('reports AI failure for a date without writing completed', async () => {
+    const fixture = await createProjectFixture();
+    try {
+      const result = await generateProjectDailyLogs(
+        fixture.database,
+        fixture.manager,
+        'https://example.com/a.git',
+        ['2026-07-26'],
+        createMockAi(async (day) => ({
+          ...day,
+          ailogDraft: [],
+          warnings: ['AI 润色失败: timeout'],
+        })),
+      );
+
+      assert.deepStrictEqual(result.generatedDates, []);
+      assert.deepStrictEqual(result.failures, [
+        { date: '2026-07-26', message: 'AI 润色失败: timeout' },
+      ]);
+      assert.deepStrictEqual(
+        loadDailyLog(fixture.manager, '2026-07-26').completed,
+        [],
       );
     } finally {
       await fixture.database.close();

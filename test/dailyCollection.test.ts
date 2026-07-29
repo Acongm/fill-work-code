@@ -12,7 +12,7 @@ import { loadRegistry } from '../src/shared/utils/repoRegistry';
 import { WorkLogManager } from '../src/daily/utils/workLogManager';
 import { GitEvidenceService } from '../src/collection/utils/gitEvidenceService';
 import { applyGitPreview } from '../src/collection/commands/applyGitPreview';
-import { saveGeneratedAilog } from '../src/collection/commands/saveGeneratedAilog';
+import { savePolishedCompleted } from '../src/collection/commands/savePolishedCompleted';
 import { AiConversationRepository } from '../src/database/commands/aiConversationRepository';
 import { materializeConversationAilog } from '../src/collection/commands/materializeConversationAilog';
 
@@ -83,7 +83,7 @@ suite('Daily and collection', () => {
     }
   });
 
-  test('AI apply stores structured rows before projecting only ailog', async () => {
+  test('AI polish apply writes completed with project assignment', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-preview-'));
     const database = await openSqlJsDatabase(path.join(root, 'work-log.sqlite'));
     const manager = new WorkLogManager(root);
@@ -96,33 +96,53 @@ suite('Daily and collection', () => {
         blockers: [],
         notes: '',
         gitlog: ['keep git'],
-        ailog: ['old ai'],
+        ailog: ['old ai from codex'],
         gitCommit: ['abcdef12 keep'],
         origin_url: ['https://example.com/a.git'],
       });
 
-      await saveGeneratedAilog(database, manager, '2026-07-27', [
-        'first generated ai',
-        'second generated ai',
-      ]);
-      await saveGeneratedAilog(database, manager, '2026-07-27', [
-        'replacement ai',
-      ]);
-
-      const rows = database.all<{ content: string; source: string }>(
-        `SELECT content, source FROM daily_items
-         WHERE date = ? AND kind = 'ailog'
-         ORDER BY sort_order`,
-        ['2026-07-27'],
+      await savePolishedCompleted(
+        manager,
+        '2026-07-27',
+        ['first generated item', 'second generated item'],
+        ['https://example.com/a.git'],
       );
-      assert.deepStrictEqual(rows, [
-        { content: 'replacement ai', source: 'ai' },
-      ]);
+      await savePolishedCompleted(
+        manager,
+        '2026-07-27',
+        ['replacement item'],
+        ['https://example.com/a.git'],
+      );
+
       const saved = manager.getDailyLog(new Date(2026, 6, 27, 12));
-      assert.deepStrictEqual(saved?.ailog, ['replacement ai']);
-      assert.deepStrictEqual(saved?.completed, ['manual completed']);
+      assert.deepStrictEqual(saved?.completed, [
+        'manual completed',
+        'first generated item',
+        'second generated item',
+        'replacement item',
+      ]);
+      assert.deepStrictEqual(saved?.ailog, ['old ai from codex']);
       assert.deepStrictEqual(saved?.gitlog, ['keep git']);
-      assert.deepStrictEqual(saved?.gitCommit, ['abcdef12 keep']);
+      assert.deepStrictEqual(saved?.projectLinks, [
+        {
+          field: 'completed',
+          content: 'first generated item',
+          assignment: 'project',
+          projectOriginUrl: 'https://example.com/a.git',
+        },
+        {
+          field: 'completed',
+          content: 'second generated item',
+          assignment: 'project',
+          projectOriginUrl: 'https://example.com/a.git',
+        },
+        {
+          field: 'completed',
+          content: 'replacement item',
+          assignment: 'project',
+          projectOriginUrl: 'https://example.com/a.git',
+        },
+      ]);
     } finally {
       await database.close();
       fs.rmSync(root, { recursive: true, force: true });

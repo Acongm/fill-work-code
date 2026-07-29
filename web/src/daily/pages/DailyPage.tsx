@@ -3,6 +3,7 @@ import type {
   DailyLog,
   DailyProjectLink,
 } from '@host-utils/types/dailyLog';
+import type { RepositoryOption } from '@host-utils/types/repositoryOption';
 import { GeneratedFieldList } from '../views/GeneratedFieldList';
 import {
   ProjectAssignmentSelect,
@@ -11,8 +12,8 @@ import {
 
 interface DailyPageProps {
   log: DailyLog;
-  loading: boolean;
-  repositoryOptions: string[];
+  dateLoading?: boolean;
+  repositoryOptions: RepositoryOption[];
   showGitlog: boolean;
   showGitCommit: boolean;
   showPlan: boolean;
@@ -25,13 +26,12 @@ interface DailyPageProps {
   ) => void;
   onNotesChange: (notes: string) => void;
   onNotesProjectChange: (originUrl: string | null) => void;
-  onSyncToCompleted: (items: string[], label: string) => void;
   onSyncGeneratedJson: () => void;
 }
 
 export const DailyPage: React.FC<DailyPageProps> = ({
   log,
-  loading,
+  dateLoading = false,
   repositoryOptions,
   showGitlog,
   showGitCommit,
@@ -41,15 +41,13 @@ export const DailyPage: React.FC<DailyPageProps> = ({
   onUserFieldChange,
   onNotesChange,
   onNotesProjectChange,
-  onSyncToCompleted,
   onSyncGeneratedJson,
 }) => {
-  if (loading) {
-    return <div className="daily-page__empty">加载中...</div>;
-  }
-
   return (
-    <div className="daily-page">
+    <div
+      className={`daily-page${dateLoading ? ' daily-page--loading' : ''}`}
+      aria-busy={dateLoading}
+    >
       <UserFieldList
         field="completed"
         label="✅ 今日完成"
@@ -60,39 +58,6 @@ export const DailyPage: React.FC<DailyPageProps> = ({
         onChange={(items, links) =>
           onUserFieldChange('completed', items, links)
         }
-      />
-
-      <div className="generated-fields-toolbar">
-        <span>程序生成字段</span>
-        <button
-          type="button"
-          className="btn secondary btn-sm"
-          onClick={onSyncGeneratedJson}
-        >
-          同步 JSON
-        </button>
-      </div>
-      {showGitlog && (
-        <GeneratedFieldList
-          label="🧾 GitLog"
-          items={log.gitlog || []}
-          onSyncToCompleted={onSyncToCompleted}
-        />
-      )}
-      <GeneratedFieldList
-        label="🤖 AILog"
-        items={log.ailog || []}
-        onSyncToCompleted={onSyncToCompleted}
-      />
-      {showGitCommit && (
-        <GeneratedFieldList
-          label="📝 GitCommit"
-          items={log.gitCommit || []}
-        />
-      )}
-      <GeneratedFieldList
-        label="🔗 相关仓库"
-        items={log.origin_url || []}
       />
 
       {showPlan && (
@@ -144,6 +109,32 @@ export const DailyPage: React.FC<DailyPageProps> = ({
           )}
         </section>
       )}
+
+      <div className="generated-fields-toolbar">
+        <span>程序生成字段</span>
+        <button
+          type="button"
+          className="btn secondary btn-sm"
+          onClick={onSyncGeneratedJson}
+        >
+          同步 JSON
+        </button>
+      </div>
+      {showGitlog && (
+        <GeneratedFieldList label="🧾 GitLog" items={log.gitlog || []} />
+      )}
+      <GeneratedFieldList
+        label="🤖 AILog"
+        items={log.ailog || []}
+        sourceHint="Cursor/Codex/Qoder 对话采集 · JSON 只读"
+      />
+      {showGitCommit && (
+        <GeneratedFieldList
+          label="📝 GitCommit"
+          items={log.gitCommit || []}
+        />
+      )}
+      <GeneratedFieldList label="🔗 相关仓库" items={log.origin_url || []} />
     </div>
   );
 };

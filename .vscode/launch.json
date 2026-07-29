@@ -5,6 +5,8 @@
       "name": "Run Extension",
       "type": "extensionHost",
       "request": "launch",
+      "timeout": 120000,
+      "stopOnEntry": false,
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}"
       ],
@@ -17,6 +19,8 @@
       "name": "Run Extension (Watch)",
       "type": "extensionHost",
       "request": "launch",
+      "timeout": 120000,
+      "stopOnEntry": false,
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}"
       ],
@@ -24,6 +28,19 @@
         "${workspaceFolder}/dist/**/*.js"
       ],
       "preLaunchTask": "watch:all"
+    },
+    {
+      "name": "Run Extension (Skip Build)",
+      "type": "extensionHost",
+      "request": "launch",
+      "timeout": 120000,
+      "stopOnEntry": false,
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ]
     }
   ]
 }

@@ -8,7 +8,7 @@ import { GitEvidenceService } from '../../collection/utils/gitEvidenceService';
 import { AiPolishService } from '../../collection/utils/aiPolishService';
 import { FillCacheService } from '../../collection/utils/fillCacheService';
 import type { HostPanelDeps, HostPanelState } from '../types/hostDependencies';
-import { sendFullConfig, updateWebview } from '../commands/buildWebviewConfig';
+import { sendFullConfig, updateWebview, refreshActiveDate } from '../commands/buildWebviewConfig';
 import {
   sendPluginSettings,
   savePluginSettings,
@@ -165,7 +165,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     webviewView.onDidChangeVisibility(() => {
       if (webviewView.visible && this.startupGate?.isReady()) {
         this.logStartup('Webview 恢复可见，刷新当前日期');
-        void this._updateWebview();
+        void this._buildDeps().then((deps) =>
+          refreshActiveDate(deps, this._panelState.activeDate),
+        );
       }
     });
   }

@@ -9,6 +9,9 @@ export type { DailyLog, MonthlyLog } from '../../shared/types/dailyLog';
 export class WorkLogManager {
   private storageDir: string;
   private readonly dateWriteQueues = new Map<string, Promise<void>>();
+  private readonly summaryCacheTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  private static readonly SUMMARY_CACHE_DEBOUNCE_MS = 2_000;
 
   constructor(storageDir: string) {
     this.storageDir = resolveRuntimePaths(storageDir).root;
@@ -113,7 +116,7 @@ export class WorkLogManager {
     );
     await fs.promises.rename(temporaryPath, filePath);
     const [year, month, day] = date.split('-').map(Number);
-    this.updateMonthSummaryCache(new Date(year, month - 1, day, 12));
+    this.scheduleMonthSummaryCacheUpdate(new Date(year, month - 1, day, 12));
   }
 
   private enqueueDateWrite(
@@ -221,7 +224,7 @@ export class WorkLogManager {
     const filePath = this.getDateFilePath(date);
     try {
       fs.writeFileSync(filePath, JSON.stringify(this.normalizeDailyLog(log), null, 2), 'utf-8');
-      this.updateMonthSummaryCache(date);
+      this.scheduleMonthSummaryCacheUpdate(date);
     } catch (e) {
       console.error(`Failed to save log to ${filePath}:`, e);
       throw e;
@@ -352,6 +355,23 @@ export class WorkLogManager {
         console.error(`Failed to delete summary cache at ${summaryPath}:`, e);
       }
     }
+  }
+
+  private scheduleMonthSummaryCacheUpdate(date: Date): void {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const existing = this.summaryCacheTimers.get(key);
+    if (existing) {
+      clearTimeout(existing);
+    }
+    this.summaryCacheTimers.set(
+      key,
+      setTimeout(() => {
+        this.summaryCacheTimers.delete(key);
+        this.updateMonthSummaryCache(date);
+      }, WorkLogManager.SUMMARY_CACHE_DEBOUNCE_MS),
+    );
   }
 
   private updateMonthSummaryCache(date: Date): void {

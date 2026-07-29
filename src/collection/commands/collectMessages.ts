@@ -15,6 +15,7 @@ import {
 import type { FillPreview, FillScope } from '../../shared/types/fillPreview';
 import * as vscode from 'vscode';
 import type { HostPanelDeps } from '../../app/types/hostDependencies';
+import { invalidateRepositoryOptionsCache } from '../../shared/utils/listRepositoryOptions';
 import { loadPluginSettings } from '../../settings/commands/settingsMessages';
 import { handleListRepos } from '../../projects/commands/projectMessages';
 import type { PluginSettings } from '../../settings/types/pluginSettings';
@@ -22,7 +23,7 @@ import {
   applyGitPreview,
   requestForGitPreview,
 } from './applyGitPreview';
-import { saveGeneratedAilog } from './saveGeneratedAilog';
+import { savePolishedCompleted } from './savePolishedCompleted';
 
 function postCollectLog(deps: HostPanelDeps, line: string, runId?: number): void {
   if (runId !== undefined && runId !== deps.state.collectRunId) {
@@ -525,7 +526,7 @@ export async function aiPolishFill(
       deps,
       preview
         ? '[AI] 基于当前确认页数据重新润色（不重复 Git 采集）'
-        : '[AI] 基于已有 Git 采集数据润色 → 剔除发布版本类 commit → 生成 AILog',
+        : '[AI] 基于已有 Git 采集数据润色 → 剔除发布版本类 commit → 生成今日完成',
       runId,
     );
     const existingLogs = await loadLogsForDates(deps, workingPreview.dates);
@@ -582,11 +583,11 @@ export async function applyFillPreview(
     applied = result.applied;
   } else {
     for (const day of daysToApply) {
-      await saveGeneratedAilog(
-        deps.database,
+      await savePolishedCompleted(
         deps.workLogManager,
         day.date,
         day.ailogDraft,
+        day.originUrl || [],
         (line) => postCollectLog(deps, line),
       );
       day.appliedAi = true;
@@ -598,9 +599,10 @@ export async function applyFillPreview(
   const cacheSearchConfig = buildFillCacheSearchConfig(settings);
   deps.fillCacheService.save(monthKey, preview, cacheSearchConfig);
 
+  invalidateRepositoryOptionsCache();
   deps.postToWebview({
     command: 'fillApplied',
-    message: `✅ 已写入 ${applied} 天（${mode === 'git' ? 'Git 字段' : 'AILog'}）`,
+    message: `✅ 已写入 ${applied} 天（${mode === 'git' ? 'Git 字段' : '今日完成'}）`,
     mode,
     reloadDate: deps.state.activeDate ?? preview.anchorDate,
   });
